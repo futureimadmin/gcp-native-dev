@@ -6,7 +6,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "echo Package with electron-builder against Code-OSS workbench"
+    "pack": "echo \"Package with electron-builder against Code-OSS workbench\""
   },
   "dependencies": {
     "@cnd-ide/core-sdk": "file:../core-sdk"
