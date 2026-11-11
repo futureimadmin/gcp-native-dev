@@ -1,0 +1,39 @@
+<idea-plugin>
+  <id>com.cndide.intellij</id>
+  <name>Cloud Native Development IDE</name>
+  <version>0.1.0</version>
+  <vendor email="cnd-ide@example.com">CND-IDE</vendor>
+
+  <description><![CDATA[
+    Cloud Native Development experience for Google Cloud Platform.
+    Service Explorer, Service Account Impersonation, AI assistance,
+    Harness CI/CD, and unified observability (Cloud Logging + Dynatrace).
+  ]]></description>
+
+  <change-notes><![CDATA[
+    <b>0.1.0</b> – Initial scaffold
+  ]]></change-notes>
+
+  <depends>com.intellij.modules.platform</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+  </extensions>
+
+  <actions>
+    <group id="CND.MainMenu" text="Cloud Native Dev" popup="true">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+      <action id="CND.SignIn"
+              class="com.cndide.actions.SignInAction"
+              text="Sign In"
+              description="Sign in to Google Cloud"/>
+      <action id="CND.ImpersonateSA"
+              class="com.cndide.actions.ImpersonateSaAction"
+              text="Impersonate Service Account"
+              description="Impersonate a CND service account"/>
+      <action id="CND.Bootstrap"
+              class="com.cndide.actions.BootstrapAction"
+              text="Bootstrap Project & Environments"
+              description="Create dev/sit/uat/prod with default services"/>
+    </group>
+  </actions>
+</idea-plugin>
