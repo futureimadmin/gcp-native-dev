@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+out/
+**/out/
+*.vsix
+*.jar
+target/
+**/target/
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# IDE
+.idea/
+*.iml
+.vscode/settings.json
+*.swp
+.DS_Store
+
+# Logs & temp
+*.log
+npm-debug.log*
+.yarn-integrity
+
+# Env
+.env
+.env.local
+*.local
