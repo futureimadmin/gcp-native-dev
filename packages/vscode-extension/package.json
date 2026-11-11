@@ -1,0 +1,65 @@
+{
+  "name": "cnd-ide-vscode",
+  "displayName": "Cloud Native Development IDE",
+  "description": "GCP Native Development IDE – project/env bootstrap (dev/sit/uat/prod), least-privilege Service Explorer, SA impersonation, CI/CD, Gemini, BigQuery, and full GCP integration",
+  "version": "0.1.0",
+  "publisher": "cnd-ide",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other", "Debuggers", "Programming Languages"],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:cndServiceExplorer",
+    "onCommand:cnd.signIn",
+    "onCommand:cnd.impersonateSa",
+    "onCommand:cnd.refreshServices",
+    "onCommand:cnd.bootstrapProject"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "cnd.signIn", "title": "CND: Sign In", "category": "Cloud Native Dev" },
+      { "command": "cnd.signOut", "title": "CND: Sign Out", "category": "Cloud Native Dev" },
+      { "command": "cnd.impersonateSa", "title": "CND: Impersonate Service Account", "category": "Cloud Native Dev" },
+      { "command": "cnd.clearImpersonation", "title": "CND: Clear Impersonation", "category": "Cloud Native Dev" },
+      { "command": "cnd.refreshServices", "title": "CND: Refresh Service Explorer", "icon": "$(refresh)", "category": "Cloud Native Dev" },
+      { "command": "cnd.openInConsole", "title": "Open in Google Cloud Console", "category": "Cloud Native Dev" },
+      { "command": "cnd.enableService", "title": "Enable Service", "category": "Cloud Native Dev" },
+      { "command": "cnd.setProject", "title": "CND: Set Active Project", "category": "Cloud Native Dev" },
+      { "command": "cnd.bootstrapProject", "title": "CND: Bootstrap Project & Environments", "category": "Cloud Native Dev" }
+    ],
+    "viewsContainers": {
+      "activitybar": [{ "id": "cnd-explorer", "title": "Cloud Native Dev", "icon": "resources/cnd-icon.svg" }]
+    },
+    "views": {
+      "cnd-explorer": [
+        { "id": "cndServiceExplorer", "name": "Service Explorer", "contextualTitle": "GCP Services" },
+        { "id": "cndStatus", "name": "Status", "contextualTitle": "CND Status" }
+      ]
+    },
+    "configuration": {
+      "title": "Cloud Native Development IDE",
+      "properties": {
+        "cnd.projectId": { "type": "string", "default": "", "description": "Active Google Cloud Project ID" },
+        "cnd.impersonateServiceAccount": { "type": "string", "default": "", "description": "Service account email currently being impersonated" },
+        "cnd.defaultRegion": { "type": "string", "default": "us-central1", "description": "Default region for new resources" }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^22.7.4",
+    "typescript": "^5.6.2",
+    "@vscode/vsce": "^3.0.0"
+  },
+  "dependencies": {
+    "@cnd-ide/core-sdk": "file:../core-sdk",
+    "google-auth-library": "^9.14.0"
+  },
+  "license": "Apache-2.0"
+}
