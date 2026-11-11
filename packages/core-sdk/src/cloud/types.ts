@@ -1,3 +1,7 @@
+/**
+ * Multi-cloud types for Cloud Native Studio
+ */
+
 export type CloudProvider = 'gcp' | 'aws' | 'azure';
 export type EnvironmentName = 'dev' | 'sit' | 'uat' | 'prod';
 export const DEFAULT_ENVIRONMENTS: EnvironmentName[] = ['dev', 'sit', 'uat', 'prod'];

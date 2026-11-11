@@ -20,11 +20,11 @@ Desktop (Electron + Code-OSS) → Workbench / Env Bootstrap / Runtime Mgr / Regi
 
 ## Runtimes
 
-| Runtime | Versions (examples) | Tools |
-|---------|---------------------|--------|
+| Runtime | Versions | Tools |
+|---------|----------|--------|
 | JDK | 17, 21, 25 | Maven, Gradle |
-| Python | 3.11, 3.12, 3.13 | pip, poetry, uv |
-| Node | 20, 22 | npm, pnpm, yarn |
+| Python | 3.11–3.13 | pip, poetry, uv |
+| Node | 20, 22 | npm, pnpm |
 | Go | 1.22+ | modules |
 | .NET | 8, 9 | dotnet CLI |
 
