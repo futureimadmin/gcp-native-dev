@@ -1,0 +1,19 @@
+{
+  "name": "@cnd-studio/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloud Native Studio — standalone multi-cloud IDE (GCP, AWS, Azure)",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "echo Package with electron-builder against Code-OSS workbench"
+  },
+  "dependencies": {
+    "@cnd-ide/core-sdk": "file:../core-sdk"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "productName": "Cloud Native Studio",
+  "license": "Apache-2.0"
+}

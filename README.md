@@ -1,130 +1,43 @@
-# GCP Native Dev IDE
+# Cloud Native Studio
 
-**Plugin-first Cloud Native Development IDE for Google Cloud Platform.**
+**Standalone multi-cloud IDE** for **GCP**, **AWS**, and **Azure**.
 
-Native extensions for **VS Code**, **IntelliJ / JetBrains**, and **Eclipse**.
+Not only plugins — a dedicated IDE with the same bootstrap model on every cloud:
 
-- Create projects and environments: **dev → sit → uat → prod**
-- Optional **default setup** on load (CI/CD, Cloud Functions, Storage, Firestore/DB, Gemini, BigQuery, Artifact Registry, Secret Manager, IAM)
-- **Principle of Least Privilege**: only projects and services the developer can access are shown
-- Service Account **impersonation** (no long-lived keys)
-- Designed for Harness CI/CD, Dynatrace, Cloud Logging & Trace
+- Environments: **dev → sit → uat → prod**
+- **Runtimes**: JDK, Python, Node, Go, .NET
+- **Build & registries**: Maven, Gradle, Nexus, npm, PyPI, container registries
+- **Least privilege**: only scopes and services you can use
+- Short-lived credentials (GCP SA impersonation, AWS STS, Azure managed identity)
+
+Optional **bridges** still exist for VS Code, IntelliJ, and Eclipse.
 
 **Repository:** https://github.com/futureimadmin/gcp-native-dev
 
----
+## Product shape
 
-## Repository layout
+| Layer | Package | Role |
+|-------|---------|------|
+| **Desktop IDE** | `packages/desktop-shell` | Electron shell → Code-OSS workbench |
+| **Core SDK** | `packages/core-sdk` | Auth, PoLP catalog, bootstrap, runtimes, registries |
+| **Cloud adapters** | `packages/core-sdk/src/cloud` | GCP / AWS / Azure bootstrap plans |
+| **VS Code bridge** | `packages/vscode-extension` | Optional plugin |
+| **IntelliJ / Eclipse** | `packages/intellij-plugin`, `eclipse-plugin` | Optional plugins |
 
-```
-gcp-native-dev/
-├── packages/
-│   ├── core-sdk/           # Shared auth, service catalog, project bootstrap
-│   ├── vscode-extension/   # VS Code extension (primary)
-│   ├── intellij-plugin/    # IntelliJ / JetBrains plugin (scaffold)
-│   └── eclipse-plugin/     # Eclipse plugin (scaffold)
-├── infra/
-│   └── terraform/          # Service accounts, APIs, bootstrap modules
-├── docs/
-│   ├── architecture/
-│   └── security/           # Least privilege + impersonation
-└── scripts/
-```
+See [docs/architecture/standalone-ide.md](docs/architecture/standalone-ide.md).
 
-Each plugin lives in its **own directory** under `packages/`.
+## Bootstrap flow (all clouds)
 
----
+1. Sign in to GCP, AWS, or Azure
+2. Select scope (project / account / subscription) — only what you can access
+3. IDE asks: **Create default environments?**
+4. On yes: generates IaC for dev·sit·uat·prod
+5. Per-env least-privilege identity + default services
 
-## Quick start (VS Code)
+## Runtimes & tools
 
-```bash
-git clone https://github.com/futureimadmin/gcp-native-dev.git
-cd gcp-native-dev/packages/core-sdk && npm install && npm run build
-cd ../vscode-extension && npm install
-# Open folder in VS Code → F5 (Extension Development Host)
-```
-
-Commands:
-
-| Command | Description |
-|---------|-------------|
-| **CND: Sign In** | Authenticate (ADC / gcloud) |
-| **CND: Set Active Project** | Only projects you can access |
-| **CND: Bootstrap Project & Environments** | Create dev/sit/uat/prod + default services |
-| **CND: Impersonate Service Account** | Short-lived SA token |
-| **CND: Refresh Service Explorer** | Reload accessible services |
-
-On first load (or when a project is active), the IDE asks whether to run **default setup**.
-
----
-
-## Default setup (what gets created)
-
-When the user chooses **Yes – Default Setup**:
-
-**Environments:** `dev`, `sit`, `uat`, `prod`
-
-**Per environment (least-privilege service account):**
-- Cloud Run / Cloud Functions developer
-- Cloud Storage object admin
-- Firestore / Datastore user
-- Vertex AI (Gemini) user
-- BigQuery data editor + job user
-- Artifact Registry writer
-- Secret Manager accessor
-- Logging + Trace viewer
-
-**Shared:**
-- Required APIs enabled
-- Artifact Registry Docker repository
-- Terraform plan written to `infra/cnd-bootstrap/main.tf`
-
-Apply with:
-
-```bash
-cd infra/cnd-bootstrap
-terraform init && terraform apply
-```
-
----
-
-## Principle of Least Privilege
-
-1. Only **projects** the identity can access appear in the picker.
-2. Only **services** that are **enabled** and for which the identity has at least one required permission appear in Service Explorer.
-3. BigQuery, IAM surfaces, etc. are **hidden** if the developer has no access.
-4. Impersonation is limited to the CND least-privilege service accounts.
-
-See [docs/security/least-privilege.md](docs/security/least-privilege.md).
-
----
-
-## Terraform (platform team)
-
-```bash
-cd infra/terraform/environments/dev
-export TF_VAR_project_id="your-gcp-project"
-# optional: export TF_VAR_developers_group="developers@yourdomain.com"
-terraform init && terraform apply
-```
-
-Creates `cnd-dev-sa`, `cnd-cicd-sa`, `cnd-obs-sa` and grants Token Creator to the developers group.
-
----
-
-## Status
-
-| Component | Status |
-|-----------|--------|
-| Core SDK – Auth & Impersonation | Implemented |
-| Core SDK – Service Catalog (PoLP) | Implemented |
-| Core SDK – Project / Env Bootstrap | Implemented |
-| VS Code Extension | Implemented (MVP) |
-| IntelliJ Plugin | Scaffold |
-| Eclipse Plugin | Scaffold |
-| Harness / Dynatrace deep integration | Planned |
-
----
+Toolchain profiles: JDK 17/21/25 + Maven/Gradle, Python 3.11+, Node 20/22, Go, .NET.
+Registries: Nexus, Artifactory, CodeArtifact, Artifact Registry, ECR, ACR.
 
 ## License
 
