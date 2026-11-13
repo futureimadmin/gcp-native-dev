@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <!-- No font or color overrides anywhere: the view inherits the Eclipse workbench fonts and theme. -->
+   <extension point="org.eclipse.ui.views">
+      <category id="com.cndide.eclipse.category" name="Cloud Native Dev"/>
+      <view id="com.cndide.eclipse.servicesView"
+            name="Service Explorer"
+            category="com.cndide.eclipse.category"
+            class="com.cndide.eclipse.ServicesView"
+            allowMultiple="false"/>
+   </extension>
+   <extension point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension targetID="*">
+         <viewShortcut id="com.cndide.eclipse.servicesView"/>
+      </perspectiveExtension>
+   </extension>
+</plugin>

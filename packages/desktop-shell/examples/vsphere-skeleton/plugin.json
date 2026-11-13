@@ -1,0 +1,7 @@
+{
+  "id": "example.vsphere",
+  "name": "VMware vSphere (example)",
+  "version": "0.1.0",
+  "description": "Skeleton private-cloud connector built on the govc CLI. Read-only inventory; shows how to add a private cloud.",
+  "main": "main.js"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "cns.ai.assistants",
+  "name": "AI Assistants",
+  "version": "1.0.0",
+  "description": "Claude, Gemini, Grok and any OpenAI-compatible endpoint (including local models), plus Claude Code / Gemini CLI / Codex CLI terminal agents.",
+  "main": "main.js"
+}

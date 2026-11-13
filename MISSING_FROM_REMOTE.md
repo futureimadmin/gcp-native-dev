@@ -1,10 +1,9 @@
-# Files still local-only or incomplete on GitHub
+# Restored files
 
-| Path | Notes |
-|------|--------|
-| `packages/core-sdk/src/services/catalog.ts` | Full PoLP catalog (~12KB) — push separately if needed |
-| `packages/vscode-extension/src/providers/authManager.ts` | Full auth manager (~7KB) |
-| `docs/demo/slides/*.png` | Demo slide images |
-| `docs/demo/video/*.mp4` (real binary) | Only LFS **pointer** is on GitHub; upload binary via `git lfs push` |
+`packages/core-sdk/src/services/catalog.ts` and
+`packages/vscode-extension/src/providers/authManager.ts` were missing from the
+repository. They have been re-implemented (not recovered from the original) so the
+SDK, VS Code extension and desktop IDE build. Compare with any original copy if one
+turns up.
 
-Core Studio / multi-cloud / desktop / runtimes / registries **are** on `main`.
+Still not included: `docs/demo/slides/*.png` and the real demo MP4 (LFS pointer only).

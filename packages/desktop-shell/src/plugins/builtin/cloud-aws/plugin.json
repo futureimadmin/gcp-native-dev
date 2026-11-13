@@ -1,0 +1,7 @@
+{
+  "id": "cns.cloud.aws",
+  "name": "Amazon Web Services",
+  "version": "1.0.0",
+  "description": "AWS connector: CLI profiles and SSO, resource inventory, CodeBuild, SAM deploy, resources.",
+  "main": "main.js"
+}

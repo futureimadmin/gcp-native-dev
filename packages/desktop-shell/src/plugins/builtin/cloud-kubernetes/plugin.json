@@ -1,0 +1,7 @@
+{
+  "id": "cns.cloud.kubernetes",
+  "name": "Kubernetes (private & hybrid cloud)",
+  "version": "1.0.0",
+  "description": "Connects to any cluster in your kubeconfig: on-prem, OpenShift, Tanzu, Rancher, EKS/GKE/AKS.",
+  "main": "main.js"
+}

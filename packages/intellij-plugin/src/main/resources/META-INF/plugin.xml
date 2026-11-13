@@ -1,39 +1,95 @@
 <idea-plugin>
   <id>com.cndide.intellij</id>
   <name>Cloud Native Development IDE</name>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <vendor email="cnd-ide@example.com">CND-IDE</vendor>
 
   <description><![CDATA[
-    Cloud Native Development experience for Google Cloud Platform.
-    Service Explorer, Service Account Impersonation, AI assistance,
-    Harness CI/CD, and unified observability (Cloud Logging + Dynatrace).
+    Turns an IntelliJ project into a Cloud Native Development project for Google Cloud.
+    Right-click the project to enable it, then run Cloud Build CI/CD pipelines, create cloud
+    resources and deploy to Cloud Run across dev, sit, uat and prod, all from the IDE.
+    The UI uses your IDE's own fonts and theme.
   ]]></description>
 
   <change-notes><![CDATA[
-    <b>0.1.0</b> – Initial scaffold
+    <b>0.2.0</b> – Per-project Cloud Native mode, right-click menu, CI/CD pipeline, resources, deploy, environments, status bar and project view markers, stateful Sign In/Out and Change Project<br/>
+    <b>0.1.0</b> – Initial Service Explorer
   ]]></change-notes>
 
   <depends>com.intellij.modules.platform</depends>
 
   <extensions defaultExtensionNs="com.intellij">
+    <projectService serviceImplementation="com.cndide.gcp.CndProject"/>
+    <toolWindow id="Cloud Native Dev" anchor="left" secondary="false"
+                factoryClass="com.cndide.ui.CndToolWindowFactory"/>
+    <toolWindow id="Cloud Native Console" anchor="bottom" canCloseContents="true"
+                factoryClass="com.cndide.ui.CndConsoleFactory"/>
+    <notificationGroup id="Cloud Native Dev" displayType="BALLOON"/>
+    <postStartupActivity implementation="com.cndide.ui.CndStartup"/>
+    <projectViewNodeDecorator implementation="com.cndide.ui.CndNodeDecorator"/>
+    <statusBarWidgetFactory id="CndStatusWidget" implementation="com.cndide.ui.CndStatusWidgetFactory"/>
   </extensions>
 
   <actions>
-    <group id="CND.MainMenu" text="Cloud Native Dev" popup="true">
-      <add-to-group group-id="ToolsMenu" anchor="last"/>
-      <action id="CND.SignIn"
-              class="com.cndide.actions.SignInAction"
-              text="Sign In"
-              description="Sign in to Google Cloud"/>
-      <action id="CND.ImpersonateSA"
-              class="com.cndide.actions.ImpersonateSaAction"
-              text="Impersonate Service Account"
-              description="Impersonate a CND service account"/>
-      <action id="CND.Bootstrap"
-              class="com.cndide.actions.BootstrapAction"
-              text="Bootstrap Project & Environments"
-              description="Create dev/sit/uat/prod with default services"/>
+    <action id="CND.Enable" class="com.cndide.actions.EnableCloudNativeAction" text="Enable Cloud Native Development"
+            description="Connect this project to Google Cloud and turn on Cloud Native Development mode"/>
+    <action id="CND.SignIn" class="com.cndide.actions.SignInAction" text="Sign In"
+            description="Sign in or out of Google Cloud"/>
+    <action id="CND.SelectProject" class="com.cndide.actions.SelectProjectAction" text="Select Project…"
+            description="Choose the Google Cloud project for this IDE project"/>
+    <action id="CND.SwitchEnv" class="com.cndide.actions.SwitchEnvAction" text="Switch Environment…"
+            description="Switch between dev, sit, uat and prod"/>
+    <action id="CND.ImpersonateSA" class="com.cndide.actions.ImpersonateSaAction" text="Run As Service Account…"
+            description="Run cloud commands as a least-privilege service account"/>
+    <action id="CND.GeneratePipeline" class="com.cndide.actions.GeneratePipelineAction" text="Generate CI/CD Pipeline"
+            description="Write cloudbuild.yaml for build, push and deploy"/>
+    <action id="CND.RunPipeline" class="com.cndide.actions.RunPipelineAction" text="Run CI/CD Pipeline"
+            description="Run the Cloud Build pipeline for the active environment"/>
+    <action id="CND.Deploy" class="com.cndide.actions.DeployAction" text="Deploy to Cloud Run"
+            description="Deploy this project to Cloud Run for the active environment"/>
+    <action id="CND.CreateResource" class="com.cndide.actions.CreateResourceAction" text="Create Cloud Resource…"
+            description="Create a bucket, registry, topic or secret in the active environment"/>
+    <action id="CND.Bootstrap" class="com.cndide.actions.BootstrapAction" text="Bootstrap Environments (Terraform)…"
+            description="Generate Terraform for dev/sit/uat/prod"/>
+    <action id="CND.OpenConsole" class="com.cndide.actions.OpenConsoleAction" text="Open Google Cloud Console"
+            description="Open this project in the Google Cloud Console"/>
+    <action id="CND.Refresh" class="com.cndide.actions.RefreshAction" text="Refresh"
+            description="Refresh sign-in state and services"/>
+
+    <!-- Right-click the project in the Project view -->
+    <group id="CND.ProjectMenu" text="Cloud Native Dev" popup="true">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+      <reference ref="CND.Enable"/>
+      <separator/>
+      <reference ref="CND.RunPipeline"/>
+      <reference ref="CND.Deploy"/>
+      <reference ref="CND.CreateResource"/>
+      <reference ref="CND.GeneratePipeline"/>
+      <separator/>
+      <reference ref="CND.SwitchEnv"/>
+      <reference ref="CND.SelectProject"/>
+      <reference ref="CND.ImpersonateSA"/>
+      <reference ref="CND.SignIn"/>
+      <reference ref="CND.Bootstrap"/>
+      <reference ref="CND.OpenConsole"/>
+    </group>
+
+    <!-- Top-level menu -->
+    <group id="CND.MainMenu" text="Cloud Native" popup="true">
+      <add-to-group group-id="MainMenu" anchor="before" relative-to-action="HelpMenu"/>
+      <reference ref="CND.Enable"/>
+      <separator/>
+      <reference ref="CND.RunPipeline"/>
+      <reference ref="CND.Deploy"/>
+      <reference ref="CND.CreateResource"/>
+      <reference ref="CND.GeneratePipeline"/>
+      <separator/>
+      <reference ref="CND.SwitchEnv"/>
+      <reference ref="CND.SelectProject"/>
+      <reference ref="CND.ImpersonateSA"/>
+      <reference ref="CND.SignIn"/>
+      <reference ref="CND.Bootstrap"/>
+      <reference ref="CND.OpenConsole"/>
     </group>
   </actions>
 </idea-plugin>

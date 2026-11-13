@@ -1,0 +1,14 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Cloud Native Development IDE
+Bundle-SymbolicName: com.cndide.eclipse;singleton:=true
+Bundle-Version: 0.1.0.qualifier
+Bundle-Vendor: CND-IDE
+Bundle-RequiredExecutionEnvironment: JavaSE-17
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.core.runtime,
+ org.eclipse.jface,
+ org.eclipse.ui.ide
+Export-Package: com.cndide.eclipse,
+ com.cndide.eclipse.gcp
+Bundle-ActivationPolicy: lazy

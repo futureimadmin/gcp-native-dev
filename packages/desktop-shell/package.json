@@ -3,16 +3,43 @@
   "version": "0.1.0",
   "private": true,
   "description": "Cloud Native Studio — standalone multi-cloud IDE (GCP, AWS, Azure)",
+  "author": "FutureIM",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "echo \"Package with electron-builder against Code-OSS workbench\""
+    "dev": "electron . --dev",
+    "check": "node scripts/check.js",
+    "dist": "electron-builder --win --x64",
+    "pack": "electron-builder --win --x64 --dir"
   },
   "dependencies": {
-    "@cnd-ide/core-sdk": "file:../core-sdk"
+    "@cnd-ide/core-sdk": "file:../core-sdk",
+    "monaco-editor": "^0.52.0"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "in.futureim.cloudnativestudio",
+    "productName": "Cloud Native Studio",
+    "directories": { "output": "release" },
+    "files": [
+      "src/**/*",
+      "renderer/**/*",
+      "node_modules/monaco-editor/min/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "productName": "Cloud Native Studio",
   "license": "Apache-2.0"

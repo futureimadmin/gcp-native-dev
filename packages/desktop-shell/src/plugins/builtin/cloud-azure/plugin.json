@@ -1,0 +1,7 @@
+{
+  "id": "cns.cloud.azure",
+  "name": "Microsoft Azure",
+  "version": "1.0.0",
+  "description": "Azure connector: az login, subscriptions, resource inventory, Container Apps deploy, resources.",
+  "main": "main.js"
+}

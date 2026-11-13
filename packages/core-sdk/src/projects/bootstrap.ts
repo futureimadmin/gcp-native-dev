@@ -3,9 +3,9 @@
  * Creates GCP-native structure with environments: dev → sit → uat → prod
  */
 
-export type EnvironmentName = 'dev' | 'sit' | 'uat' | 'prod';
+import type { EnvironmentName } from '../cloud/types';
 
-export const DEFAULT_ENVIRONMENTS: EnvironmentName[] = ['dev', 'sit', 'uat', 'prod'];
+import { DEFAULT_ENVIRONMENTS } from '../cloud/types';
 
 export const DEFAULT_SERVICES = [
   'cloudbuild.googleapis.com',

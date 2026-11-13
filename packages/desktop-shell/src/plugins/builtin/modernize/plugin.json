@@ -1,0 +1,11 @@
+{
+  "id": "cns.modernize",
+  "name": "Modernize & Migrate",
+  "version": "1.0.0",
+  "description": "Assesses a project, maps it to GCP / AWS / Azure / Kubernetes services and writes a phased migration plan.",
+  "main": "main.js",
+  "renderer": "renderer.js",
+  "contributes": {
+    "views": [{ "id": "modernize", "title": "Modernize", "icon": "⇄" }]
+  }
+}

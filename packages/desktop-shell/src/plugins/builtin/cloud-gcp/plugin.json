@@ -1,0 +1,7 @@
+{
+  "id": "cns.cloud.gcp",
+  "name": "Google Cloud",
+  "version": "1.0.0",
+  "description": "Google Cloud connector: Application Default Credentials, projects, Cloud Build, Cloud Run, resources.",
+  "main": "main.js"
+}

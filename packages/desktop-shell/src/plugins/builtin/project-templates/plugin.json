@@ -1,0 +1,7 @@
+{
+  "id": "cns.templates",
+  "name": "Project Templates",
+  "version": "1.0.0",
+  "description": "File > New Project templates for containers, serverless and static sites on GCP, AWS and Azure.",
+  "main": "main.js"
+}

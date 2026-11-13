@@ -39,3 +39,6 @@ npm-debug.log*
 .env
 .env.local
 *.local
+release/
+build/
+.gradle/
