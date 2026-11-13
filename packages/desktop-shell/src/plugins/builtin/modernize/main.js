@@ -173,7 +173,7 @@ function plan(a, targetId) {
   const lines = [];
   const L = (s = '') => lines.push(s);
   L(`# Migration plan: ${a.name} → ${t.name}`);
-  L(`_Generated ${today} by Cloud Native Studio. This is a starting point from static analysis; validate each step with the owning teams._`);
+  L(`_Generated ${today} by Nativity Studio. This is a starting point from static analysis; validate each step with the owning teams._`);
   L();
   L('## 1. What was found');
   L(`- **Languages:** ${a.languages.slice(0, 6).map((l) => `${l.name} (${l.files})`).join(', ') || 'none detected'}`);
@@ -200,7 +200,7 @@ function plan(a, targetId) {
   L('**Phase 0 — Foundation (landing zone)**');
   L(`- Create the ${t.name} account/project/subscription (or cluster namespace) structure for dev, sit, uat and prod.`);
   L(`- Set up ${t.identity} with least-privilege roles per environment; no long-lived keys.`);
-  L(`- Provision networking (${t.network}) and the baseline IaC (${t.iac}). In Cloud Native Studio: **Cloud > Bootstrap Environments (Terraform)**.`);
+  L(`- Provision networking (${t.network}) and the baseline IaC (${t.iac}). In Nativity Studio: **Cloud > Bootstrap Environments (Terraform)**.`);
   L();
   L('**Phase 1 — Build and package**');
   L(`- ${a.infra.docker ? 'Review and harden the existing Dockerfile(s) (non-root user, pinned base image).' : 'Add a Dockerfile (non-root, pinned base image, health endpoint).'}`);

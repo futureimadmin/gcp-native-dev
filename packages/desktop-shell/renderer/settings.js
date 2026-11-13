@@ -26,12 +26,19 @@ function generalPane() {
   prompt.onchange = async () => { await tryInv('settings:set', 'startup.promptLogin', prompt.checked); state.settings.startup = { ...(state.settings.startup || {}), promptLogin: prompt.checked }; };
   const mode = h('select', {}, [['afterDelay', 'After a short delay (about 1 second)'], ['onBlur', 'When the window loses focus'], ['off', 'Off (save manually)']].map(([v, t]) => h('option', { value: v, text: t, selected: v === ((state.settings.editor || {}).autoSave || 'afterDelay') })));
   mode.onchange = async () => { await tryInv('settings:set', 'editor.autoSave', mode.value); state.settings.editor = { ...(state.settings.editor || {}), autoSave: mode.value }; };
-  const build = h('input', { type: 'checkbox', checked: (state.settings.editor || {}).autoBuild !== false });
-  build.onchange = async () => { await tryInv('settings:set', 'editor.autoBuild', build.checked); state.settings.editor = { ...(state.settings.editor || {}), autoBuild: build.checked }; };
+  const save = async (key, val) => { await tryInv('settings:set', 'editor.' + key, val); state.settings.editor = { ...(state.settings.editor || {}), [key]: val }; };
+  const build = h('input', { type: 'checkbox', checked: (state.settings.editor || {}).autoBuild === true });
+  build.onchange = () => save('autoBuild', build.checked);
+  const check = h('input', { type: 'checkbox', checked: (state.settings.editor || {}).checkErrors !== false });
+  check.onchange = () => { save('checkErrors', check.checked); if (!check.checked && typeof clearProblems === 'function') clearProblems(); };
+  const delay = h('select', {}, [[5, 'After I stop typing for 5 seconds'], [10, 'After I stop typing for 10 seconds'], [0, 'Only when I save']].map(([v, t]) => h('option', { value: v, text: t, selected: v === (((state.settings.editor || {}).checkDelay) == null ? 5 : (state.settings.editor || {}).checkDelay) })));
+  delay.onchange = () => save('checkDelay', Number(delay.value));
   return h('div', {}, h('h3', { text: 'General' }),
     h('label', { text: 'Editor font size' }), size,
     h('label', { text: 'Auto-save' }), mode,
-    h('label', { class: 'inline' }, build, ' Compile in the background when I save a source file (Java, Kotlin, TypeScript, Go, C#)'),
+    h('label', { class: 'inline' }, check, ' Check Java for compile errors in the background (red mark in the margin, listed in PROBLEMS)'),
+    h('label', { text: 'Check Java' }), delay,
+    h('label', { class: 'inline' }, build, ' Also auto-build Kotlin, TypeScript, Go and C# projects on save (off by default)'),
     h('label', { class: 'inline' }, prompt, ' Ask me to sign in to Google Cloud at startup when no Application Default Credentials are found'),
     h('p', { class: 'hint', text: 'Fonts follow the NetBeans defaults: Segoe UI for the interface, Monospaced for the editor.' }));
 }
@@ -127,7 +134,7 @@ function pluginsPane(rerender) {
 
 function aboutPane() {
   const i = state.info || {};
-  return h('div', {}, h('h3', { text: 'Cloud Native Studio' }),
+  return h('div', {}, h('h3', { text: 'Nativity Studio' }),
     h('div', { class: 'kv' }, `Version ${i.version || ''} · Electron ${i.electron || ''} · ${i.platform || ''}`),
     h('div', { class: 'kv' }, `Data folder: ${i.userData || ''}`),
     h('div', { class: 'kv' }, `Secure key storage: ${i.secureStorage ? 'available' : 'unavailable'}`));

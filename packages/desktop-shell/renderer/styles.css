@@ -218,3 +218,28 @@ webview { flex: 1; border: none; background: #fff; }
 .helpbody code, .helpbody kbd { background: var(--bg2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-family: var(--mono); font-size: 12px; } .helpbody li { margin: 3px 0; }
 .sideborder { border-right: 1px solid var(--line); }
 .helpwrap { flex: 1; min-height: 0; } .helpwrap > * { min-height: 0; }
+
+.logo-sm { width: 20px; height: 20px; vertical-align: -5px; margin-right: 4px; }
+.llogo-img { width: 96px; height: 96px; }
+
+.msg.toolline { color: var(--dim); font: 12px var(--mono); margin: 2px 0 6px; padding-left: 8px; border-left: 2px solid var(--line); } .aiedits { padding: 2px 12px; margin: 0; }
+
+/* explorer packages, quick pick, hierarchy, search results */
+.node .ico { margin-right: 4px; font-size: 12px; } .node.group { font-weight: 600; color: var(--accent2); }
+#palette li { display: flex; gap: 8px; align-items: baseline; } #palette li .ql { flex: none; } #palette li .qd { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: right; }
+.qico { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 4px; background: var(--bg3); color: var(--accent2); font: 11px var(--mono); flex: none; }
+.hrow { display: flex; gap: 8px; align-items: baseline; padding: 3px 6px; } .hrow.link { cursor: pointer; } .hrow.link:hover { background: var(--bg2); } .hrow .ico { display: inline-block; width: 16px; text-align: center; color: var(--accent2); font: 11px var(--mono); }
+.tgl { padding: 1px 8px; font-family: var(--mono); } .results .svc { gap: 10px; } .results .svc small { min-width: 28px; } .results .mt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; text-align: left; }
+.results .cat { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* compile problems */
+.olink { cursor: pointer; text-decoration: underline dotted; } .olink:hover { background: var(--bg2); } .t-warn { color: var(--warn); }
+#problems-list { flex: 1; overflow: auto; font-family: var(--font); font-size: 12px; } .prob { display: flex; gap: 8px; align-items: baseline; padding: 3px 12px; cursor: pointer; } .prob:hover { background: var(--bg2); }
+.prob.error .pico { color: var(--danger); } .prob.warning .pico { color: var(--warn); } .prob .pmsg { flex: 1; } #problems-list .cat { padding-left: 12px; }
+#st-problems { cursor: pointer; font-weight: 600; }
+
+/* compile error marks: a small dot in the margin, no wide bars or squiggles */
+.monaco-editor .cns-glyph-error { background: radial-gradient(circle, #e5484d 0 4.5px, transparent 5px) center / 14px 14px no-repeat; cursor: pointer; }
+.monaco-editor .cns-glyph-warn { background: radial-gradient(circle, #e0a100 0 4.5px, transparent 5px) center / 14px 14px no-repeat; cursor: pointer; }
+.prob { gap: 10px; } .prob .pico { width: 14px; flex: none; } .prob .pfile { width: 220px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.prob .pline { width: 50px; flex: none; color: var(--dim); text-align: right; } .prob.head { cursor: default; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); } .prob.head:hover { background: var(--bg); }

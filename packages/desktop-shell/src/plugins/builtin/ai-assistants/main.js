@@ -59,6 +59,61 @@ function registerSignedInProviders(ctx) {
     id: 'claude-code', name: 'Claude Code (your Claude login)', needsKey: false, auth: 'signin',
     models: ['default', 'sonnet', 'opus', 'haiku'], defaultModel: 'default',
     login: { cmd: 'claude', args: ['auth', 'login'] },
+    canEdit: true,
+    /** Streams a Claude Code turn into the IDE. Follow-up turns resume the same session so Claude keeps its context. */
+    chatStream({ model, system, messages, session, edits, cwd, signal }, emit) {
+      const file = claudeFile();
+      if (!file) return Promise.reject(new Error('Claude Code is not installed or not on PATH.'));
+      const last = messages[messages.length - 1].content;
+      const NN = String.fromCharCode(10, 10);
+      const prompt = session ? last : (system ? system + NN : '') + (messages.length > 1 ? messages.map((m) => (m.role === 'user' ? 'User' : 'Assistant') + ': ' + m.content).join(NN) : last);
+      const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
+        ...(session ? ['--resume', session] : []), ...(edits ? ['--permission-mode', 'acceptEdits'] : []),
+        ...(model && model !== 'default' ? ['--model', model] : [])];
+      return new Promise((resolve, reject) => {
+        const viaShell = /\.(cmd|bat)$/i.test(file);
+        const child = viaShell ? spawn('"' + file + '" ' + args.join(' '), { cwd, shell: true, windowsHide: true }) : spawn(file, args, { cwd, windowsHide: true });
+        let buf = '';
+        let err = '';
+        let gotDelta = false;
+        let finished = false;
+        const brief = (b) => String((b.input && (b.input.file_path || b.input.path || b.input.command || b.input.pattern || b.input.url || b.input.description)) || '').slice(0, 140);
+        const handle = (line) => {
+          let j;
+          try { j = JSON.parse(line); } catch { return; }
+          if (j.type === 'system' && j.subtype === 'init') emit({ type: 'session', session: j.session_id });
+          else if (j.type === 'stream_event' && j.event && j.event.type === 'content_block_delta' && j.event.delta && j.event.delta.type === 'text_delta') { gotDelta = true; emit({ type: 'delta', text: j.event.delta.text }); }
+          else if (j.type === 'assistant' && j.message && Array.isArray(j.message.content)) {
+            for (const b of j.message.content) {
+              if (b.type === 'tool_use') emit({ type: 'tool', name: b.name, detail: brief(b) });
+              else if (b.type === 'text' && !gotDelta && b.text) emit({ type: 'delta', text: b.text });
+            }
+            gotDelta = false;
+          } else if (j.type === 'result') {
+            finished = true;
+            if (j.is_error || AUTH_FAIL.test(String(j.result || '').slice(0, 160))) {
+              if (AUTH_FAIL.test(String(j.result || ''))) authRejected = true;
+              emit({ type: 'error', message: AUTH_FAIL.test(String(j.result || '')) ? 'Claude Code rejected its saved login (it has expired). Click Sign in to log in again; no API key is needed.' : String(j.result || 'Claude Code failed.') });
+            } else { authRejected = false; emit({ type: 'result', session: j.session_id, cost: j.total_cost_usd }); }
+          }
+        };
+        child.stdout.on('data', (d) => {
+          buf += d;
+          let i;
+          while ((i = buf.indexOf(String.fromCharCode(10))) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (line) handle(line); }
+        });
+        child.stderr.on('data', (d) => { err += d; });
+        child.on('error', reject);
+        child.on('close', (code) => {
+          if (buf.trim()) handle(buf.trim());
+          if (!finished && code !== 0) return reject(new Error('Claude Code stopped (exit ' + code + '). ' + err.trim().split(String.fromCharCode(10)).slice(-2).join(' ')));
+          resolve();
+        });
+        if (signal) signal.addEventListener('abort', () => { try { child.kill(); } catch { /* gone */ } });
+        child.stdin.on('error', () => {});
+        child.stdin.end(prompt);
+      });
+    },
     help: 'Uses the Claude Code you already installed and signed in to (your Claude subscription or Console account). No API key. Runs read-only in your project folder.',
     async status() {
       if (!claudeFile()) return { signedIn: false, detail: 'Claude Code is not installed. Install: npm install -g @anthropic-ai/claude-code' };

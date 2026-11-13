@@ -1,4 +1,4 @@
-# Cloud Native Studio — multi-cloud IDE for Windows
+# Nativity Studio — multi-cloud IDE for Windows
 
 A standalone desktop IDE for building, modernizing and migrating applications across **Google Cloud, AWS, Azure and private clouds**, with AI assistants built in. Core is small; clouds, AI providers, project templates and migration analyzers are **plugins** (see [docs/PLUGINS.md](docs/PLUGINS.md)).
 
@@ -18,7 +18,7 @@ If `npm install` leaves `node_modules/electron/dist` without `electron.exe` (see
 ## Windows installer
 
 ```bash
-npm run dist         # release/Cloud Native Studio Setup <version>.exe (unsigned)
+npm run dist         # release/Nativity Studio Setup <version>.exe (unsigned)
 ```
 
 Code signing is disabled (`signAndEditExecutable: false`) because electron-builder's signing tools need symlink privileges on Windows. Expect a SmartScreen warning until you sign it.
@@ -47,6 +47,8 @@ Code signing is disabled (`signAndEditExecutable: false`) because electron-build
 | **Layout** | Draggable splitters, collapsible sidebar, maximize/minimize bottom panel, focus mode (double-click a tab) |
 | **Service explorer** | Clicking a cloud service opens it as a workspace tab: resources, config, logs (GCP: Run, Functions, GKE, Storage, SQL, Secrets, Artifact Registry, Build, Pub/Sub) |
 | **Help** | F1: local, offline help topics (no network) |
+| **Java and code editing** | Explorer shows Source Packages with dotted package names for Maven/Gradle/Ant layouts; accurate completion (project + JDK); Open Java Class, Go to Symbol, List Methods, Type Hierarchy, Implementations, Find Usages; Generate getters/setters/constructor/toString/equals; Organize Imports; New Java Class/Interface/Enum/Record/Test; Find/Replace (Ctrl+F/H) and Find/Replace in Files; 100+ editor commands in menus and the palette |
+| **Claude Code in the IDE** | Runs inside the AI panel with your Claude login: streaming, tool-use lines, session continuity, optional file edits. No console window |
 | **Plugins** | Add clouds, AI providers, templates and analyzers. Third-party plugins are disabled until you enable them |
 
 ## Notes and limits

@@ -1,5 +1,5 @@
 /**
- * Cloud Native Studio — Electron main process.
+ * Nativity Studio — Electron main process.
  * Thin core (windows, files, settings, terminal, menus) + a plugin host. Clouds, AI providers, templates and
  * analyzers all arrive through plugins (see core/pluginhost.js and docs/PLUGINS.md).
  */
@@ -15,6 +15,21 @@ const projects = require('./core/projects');
 const ai = require('./core/ai');
 const toolsMod = require('./core/tools');
 const runtime = require('./core/runtime');
+const codeintel = require('./core/codeintel');
+const javac = require('./core/javac');
+
+app.setAppUserModelId('in.futureim.nativitystudio'); // groups the taskbar button and uses our icon
+// Data folder follows the product name; carry settings over once from earlier names of this product.
+{
+  const next = path.join(app.getPath('appData'), 'Nativity Studio');
+  try {
+    if (!app.commandLine.hasSwitch('user-data-dir') && !fs.existsSync(next)) {
+      const prev = ['OmniCloud Studio', 'Cloud Native Studio'].map((n) => path.join(app.getPath('appData'), n)).find((p) => fs.existsSync(p));
+      if (prev) fs.cpSync(prev, next, { recursive: true });
+    }
+  } catch { /* start fresh */ }
+  if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', next); // an explicit --user-data-dir wins (used for isolated test runs)
+}
 
 const DEV = process.argv.includes('--dev') || !!process.env.CND_DEBUG;
 let win = null;
@@ -61,8 +76,10 @@ function boot() {
   host.loadAll();
   cloudflow.register({ ipcMain, wrap, host, terminal, send: sendToRenderer });
   projects.register({ ipcMain, wrap, host, send: sendToRenderer, store });
-  ai.register({ ipcMain, wrap, host, store, secrets, terminal });
+  ai.register({ ipcMain, wrap, host, store, secrets, terminal, send: sendToRenderer });
   runtime.register({ ipcMain, wrap, tools });
+  codeintel.register({ ipcMain, wrap, getWorkspace: () => workspace });
+  javac.register({ ipcMain, wrap, tools, getWorkspace: () => workspace });
 }
 
 /* ------------------------------ window & menu ------------------------------ */
@@ -88,7 +105,7 @@ app.on('web-contents-created', (_e, contents) => {
 function createWindow() {
   win = new BrowserWindow({
     width: 1500, height: 940, minWidth: 1000, minHeight: 620,
-    title: 'Cloud Native Studio', backgroundColor: '#0e0f0c', show: false,
+    title: 'Nativity Studio', backgroundColor: '#0e0f0c', show: false, icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: true },
   });
   win.once('ready-to-show', () => win.show());
@@ -120,6 +137,13 @@ function buildMenu() {
       submenu: [
         cmd('New Project…', 'project.new', 'CmdOrCtrl+Shift+N'),
         cmd('New File', 'file.new', 'CmdOrCtrl+N'),
+        {
+          label: 'New Java',
+          submenu: [
+            cmd('Java Class…', 'java.new', 'CmdOrCtrl+Alt+N', 'class'), cmd('Interface…', 'java.new', undefined, 'interface'), cmd('Enum…', 'java.new', undefined, 'enum'),
+            cmd('Record…', 'java.new', undefined, 'record'), cmd('Annotation…', 'java.new', undefined, 'annotation'), sep, cmd('Class with main()…', 'java.new', undefined, 'main'), cmd('JUnit 5 Test…', 'java.new', undefined, 'test'),
+          ],
+        },
         sep,
         cmd('Open Folder…', 'folder.open', 'CmdOrCtrl+O'),
         { label: 'Open Recent', submenu: recents.length ? recents.map((r) => cmd(r.name, 'recent.open', undefined, r.path)) : [{ label: 'No recent projects', enabled: false }] },
@@ -129,6 +153,17 @@ function buildMenu() {
         sep,
         cmd('Save', 'file.save', 'CmdOrCtrl+S'),
         cmd('Save All', 'file.saveAll', 'CmdOrCtrl+Alt+S'),
+        cmd('Save As…', 'file.saveAs'),
+        cmd('Reload from Disk', 'file.reload'),
+        sep,
+        cmd('Close Tab', 'tab.close', 'CmdOrCtrl+W'),
+        cmd('Close Other Tabs', 'tab.closeOthers'),
+        cmd('Close All Tabs', 'tab.closeAll'),
+        cmd('Reopen Closed Tab', 'tab.reopen'),
+        sep,
+        cmd('Copy Path', 'file.copyPath'),
+        cmd('Copy Relative Path', 'file.copyRelPath'),
+        cmd('Show in File Explorer', 'file.reveal'),
         cmd('Close Folder', 'folder.close'),
         sep,
         cmd('Settings…', 'settings.open', 'CmdOrCtrl+,'),
@@ -136,7 +171,72 @@ function buildMenu() {
         { role: 'quit' },
       ],
     },
-    { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, sep, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' }, { role: 'redo' }, sep,
+        { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, sep,
+        cmd('Find…', 'edit.find', 'CmdOrCtrl+F'), cmd('Find and Replace…', 'edit.replace', 'CmdOrCtrl+H'), cmd('Find Next', 'edit.findNext', 'F3'), cmd('Find Previous', 'edit.findPrev', 'Shift+F3'),
+        cmd('Find in Files…', 'search.files', 'CmdOrCtrl+Shift+F'), cmd('Replace in Files…', 'search.replace', 'CmdOrCtrl+Shift+H'), sep,
+        {
+          label: 'Lines',
+          submenu: [
+            cmd('Duplicate Line Down', 'edit.duplicateDown'), cmd('Duplicate Line Up', 'edit.duplicateUp'), cmd('Move Line Up', 'edit.moveUp'), cmd('Move Line Down', 'edit.moveDown'),
+            cmd('Delete Line', 'edit.deleteLine'), cmd('Join Lines', 'edit.joinLines'), cmd('Insert Line Above', 'edit.insertLineAbove'), cmd('Insert Line Below', 'edit.insertLineBelow'), sep,
+            cmd('Sort Ascending', 'edit.sortAsc'), cmd('Sort Descending', 'edit.sortDesc'), cmd('Remove Duplicate Lines', 'edit.dupLinesRemove'), cmd('Trim Trailing Whitespace', 'edit.trimWs'),
+          ],
+        },
+        {
+          label: 'Selection',
+          submenu: [
+            cmd('Expand Selection', 'edit.expandSel'), cmd('Shrink Selection', 'edit.shrinkSel'), cmd('Select to Matching Bracket', 'edit.selectToBracket'), sep,
+            cmd('Add Next Occurrence', 'edit.addNextOcc'), cmd('Select All Occurrences', 'edit.selectAllOcc'), cmd('Add Cursor Above', 'edit.cursorAbove'), cmd('Add Cursor Below', 'edit.cursorBelow'), cmd('Add Cursors to Line Ends', 'edit.cursorsLineEnds'),
+          ],
+        },
+        {
+          label: 'Transform',
+          submenu: [
+            cmd('UPPER CASE', 'edit.upper'), cmd('lower case', 'edit.lower'), cmd('Title Case', 'edit.title'), sep, cmd('camelCase', 'edit.camel'), cmd('PascalCase', 'edit.pascal'), cmd('snake_case', 'edit.snake'), cmd('kebab-case', 'edit.kebab'),
+          ],
+        },
+        {
+          label: 'Folding',
+          submenu: [
+            cmd('Fold', 'fold.fold'), cmd('Unfold', 'fold.unfold'), cmd('Toggle Fold', 'fold.toggle'), cmd('Fold Recursively', 'fold.recursive'), sep,
+            cmd('Fold All', 'fold.all'), cmd('Unfold All', 'fold.unfoldAll'), cmd('Fold Level 1', 'fold.level1'), cmd('Fold Level 2', 'fold.level2'), cmd('Fold Level 3', 'fold.level3'),
+          ],
+        },
+        {
+          label: 'Indentation',
+          submenu: [cmd('Indent Line', 'edit.indent'), cmd('Outdent Line', 'edit.outdent'), cmd('Reindent Lines', 'edit.reindent'), sep, cmd('Convert to Spaces', 'edit.toSpaces'), cmd('Convert to Tabs', 'edit.toTabs'), cmd('Detect Indentation', 'edit.detectIndent')],
+        },
+        sep,
+        cmd('Toggle Line Comment', 'edit.comment'), cmd('Toggle Block Comment', 'edit.blockComment'), sep,
+        cmd('Trigger Suggestions', 'edit.suggest'), cmd('Parameter Hints', 'edit.paramHints'), cmd('Quick Fix', 'edit.quickFix', 'CmdOrCtrl+.'), cmd('Show Hover', 'edit.hover'),
+      ],
+    },
+    {
+      label: 'Navigate',
+      submenu: [
+        cmd('Go to File…', 'nav.file', 'CmdOrCtrl+P'), cmd('Open Java Class…', 'nav.class', 'CmdOrCtrl+Shift+T'), cmd('Go to Symbol in Workspace…', 'nav.symbolWorkspace', 'CmdOrCtrl+T'),
+        cmd('Go to Symbol in File…', 'edit.gotoSymbol', 'CmdOrCtrl+Shift+O'), cmd('Go to Line…', 'edit.gotoLine', 'CmdOrCtrl+G'), sep,
+        cmd('Go to Definition', 'nav.def', 'F12'), cmd('Peek Definition', 'nav.peek', 'Alt+F12'), cmd('Go to Type Definition', 'nav.typeDef'), cmd('Find Usages', 'nav.usages', 'Shift+F12'),
+        cmd('Show Implementations / Subclasses', 'nav.impl', 'CmdOrCtrl+Alt+B'), cmd('Go to Supertype', 'java.superType', 'CmdOrCtrl+U'), sep,
+        cmd('Type Hierarchy', 'java.hierarchy', 'F4'), cmd('List Methods in This File', 'java.methods', 'CmdOrCtrl+F12'), cmd('List Methods of Class…', 'java.methodsOfClass', 'CmdOrCtrl+Shift+F12'), sep,
+        cmd('Back', 'nav.back', 'Alt+Left'), cmd('Forward', 'nav.forward', 'Alt+Right'), cmd('Jump to Matching Bracket', 'edit.jumpBracket'), sep,
+        cmd('Next Problem', 'nav.nextProblem', 'F8'), cmd('Previous Problem', 'nav.prevProblem', 'Shift+F8'), sep,
+        cmd('Next Tab', 'tab.next', 'CmdOrCtrl+PageDown'), cmd('Previous Tab', 'tab.prev', 'CmdOrCtrl+PageUp'),
+      ],
+    },
+    {
+      label: 'Source',
+      submenu: [
+        cmd('Generate Code…', 'java.generate', 'Alt+Insert'), cmd('Generate Getters and Setters', 'java.gettersSetters'), cmd('Generate Getters', 'java.getters'), cmd('Generate Setters', 'java.setters'),
+        cmd('Generate Constructor', 'java.constructor'), cmd('Generate toString()', 'java.toString'), cmd('Generate equals() and hashCode()', 'java.equalsHash'), cmd('Override Methods…', 'java.override'), sep,
+        cmd('Organize Imports', 'java.organizeImports', 'CmdOrCtrl+Alt+O'), cmd('Add Import for Symbol', 'java.addImport', 'CmdOrCtrl+Shift+M'), sep,
+        cmd('Format Document', 'edit.formatDoc', 'Shift+Alt+F'), cmd('Format Selection', 'edit.formatSel'), cmd('Rename Symbol', 'edit.rename', 'F2'),
+      ],
+    },
     {
       label: 'View',
       submenu: [
@@ -152,6 +252,9 @@ function buildMenu() {
         cmd('Maximize / Restore Bottom Panel', 'layout.panelMax', 'CmdOrCtrl+Shift+M'),
         cmd('Focus Editor (hide all panels)', 'layout.focus', 'CmdOrCtrl+K Z'),
         cmd('Servers', 'view.servers'),
+        cmd('Search', 'view.search'),
+        cmd('Toggle Word Wrap', 'edit.toggleWrap', 'Alt+Z'), cmd('Toggle Minimap', 'edit.toggleMinimap'), cmd('Toggle Line Numbers', 'edit.toggleLineNumbers'), cmd('Toggle Whitespace', 'edit.toggleWhitespace'), cmd('Toggle Sticky Scroll', 'edit.toggleSticky'),
+        cmd('Increase Editor Font', 'edit.fontUp'), cmd('Decrease Editor Font', 'edit.fontDown'), cmd('Reset Editor Font', 'edit.fontReset'),
         sep,
         { role: 'reload' }, { role: 'toggleDevTools' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' },
       ],
@@ -159,10 +262,13 @@ function buildMenu() {
     {
       label: 'Run',
       submenu: [
-        cmd('Build', 'run.build', 'CmdOrCtrl+F9'),
+        cmd('Build (Java uses the built-in javac)', 'run.build', 'CmdOrCtrl+F9'),
+        cmd('Compile Java (built-in javac)', 'java.compile'),
+        cmd('Clear Compile Problems', 'java.clearProblems'),
         cmd('Run', 'run.run', 'F5'),
         cmd('Debug', 'run.debug', 'CmdOrCtrl+F5'),
         cmd('Test', 'run.test'),
+        cmd('Run This File', 'run.file', 'CmdOrCtrl+Shift+F10'),
         cmd('Stop', 'run.stop', 'Shift+F5'),
         sep,
         cmd('Run Configurations…', 'view.run'),
@@ -191,9 +297,9 @@ function buildMenu() {
       label: 'AI',
       submenu: [
         cmd('AI Assistant', 'ai.toggle'),
-        cmd('Launch Claude Code (terminal)', 'ai.cli', undefined, 'claude-code'),
-        cmd('Launch Gemini CLI (terminal)', 'ai.cli', undefined, 'gemini-cli'),
-        cmd('Launch Codex CLI (terminal)', 'ai.cli', undefined, 'codex-cli'),
+        cmd('Claude Code (in the IDE)', 'ai.claude'),
+        cmd('Gemini CLI (opens a console window)', 'ai.cli', undefined, 'gemini-cli'),
+        cmd('Codex CLI (opens a console window)', 'ai.cli', undefined, 'codex-cli'),
         ...(contributed('ai').length ? [sep, ...contributed('ai')] : []),
       ],
     },
@@ -214,7 +320,7 @@ function buildMenu() {
         cmd('Plugin Development Guide', 'help.open', undefined, 'plugins'),
         cmd('Keyboard Shortcuts', 'help.open', undefined, 'keys'),
         sep,
-        cmd('About Cloud Native Studio', 'help.about'),
+        cmd('About Nativity Studio', 'help.about'),
       ],
     },
   ];
@@ -269,12 +375,14 @@ function registerCoreIpc() {
   }));
   ipcMain.handle('secret:available', wrap(async () => secrets.available()));
 
+  ipcMain.handle('shell:showItem', wrap(async (p) => { if (typeof p !== 'string' || !fs.existsSync(p)) throw new Error('Not found.'); shell.showItemInFolder(p); }));
   ipcMain.handle('shell:openExternal', wrap(async (url) => {
     if (!/^https:\/\//i.test(url)) throw new Error('Only https links can be opened.');
     await shell.openExternal(url);
   }));
 
   ipcMain.handle('term:run', wrap(async (command, cwd) => terminal.start(command, cwd)));
+  ipcMain.handle('term:write', wrap(async (id, text) => terminal.write(id, text)));
   ipcMain.handle('term:kill', wrap(async (id) => terminal.kill(id)));
 
   ipcMain.handle('host:plugins', wrap(async () => host.describe()));

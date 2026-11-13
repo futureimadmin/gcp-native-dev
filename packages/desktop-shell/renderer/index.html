@@ -4,13 +4,13 @@
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none'; script-src 'self' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src blob: data:; connect-src 'none'" />
-<title>Cloud Native Studio</title>
+<title>Nativity Studio</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <div id="app">
   <div id="toolbar">
-    <button id="tb-home" class="brand" title="Workspace home">☁ Cloud Native Studio</button>
+    <button id="tb-home" class="brand" title="Workspace home"><img class="logo-sm" src="assets/icon.png" alt="" /> Nativity Studio</button>
     <div class="tb-sep"></div>
     <button id="tb-new" title="New Project (Ctrl+Shift+N)">＋ New</button>
     <button id="tb-open" title="Open Folder (Ctrl+O)">📂 Open</button>
@@ -58,6 +58,7 @@
         </div>
       </section>
 
+      <section id="view-search" class="view hidden"></section>
       <section id="view-run" class="view hidden"></section>
 
       <section id="view-clouds" class="view hidden">
@@ -79,6 +80,7 @@
         <div id="panel-bar">
           <button class="active" data-panel="terminal">TERMINAL</button>
           <button data-panel="output">OUTPUT</button>
+          <button data-panel="problems">PROBLEMS</button>
           <span class="spacer"></span>
           <button id="btn-term-clear" title="Clear">Clear</button>
           <button id="btn-panel-max" title="Maximize / restore panel (Ctrl+Shift+M)">&#9633;</button>
@@ -89,6 +91,7 @@
           <div id="term-input-row"><span id="term-prompt"></span><input id="term-input" spellcheck="false" autocomplete="off" /></div>
         </div>
         <div id="panel-output" class="panel-body hidden"><pre id="output-out"></pre></div>
+        <div id="panel-problems" class="panel-body hidden"><div id="problems-list"></div></div>
       </div>
     </div>
 
@@ -107,6 +110,7 @@
         <datalist id="ai-models"></datalist>
       </div>
       <div id="ai-cli" class="aicli"></div>
+      <label id="ai-edits-row" class="inline hidden aiedits"><input type="checkbox" id="ai-edits" /> Allow Claude to edit files in this project</label>
       <div id="ai-log"></div>
       <div class="aiattach">
         <button id="ai-att-file" class="subtle">+ File</button>
@@ -123,6 +127,7 @@
     <span id="st-cn" class="hidden" title="Click to switch environment"></span>
     <span id="st-cloud" title="Click to open Clouds">No cloud sign-in</span>
     <span id="st-run" class="hidden"></span>
+    <span id="st-problems" class="hidden" title="Compile problems (click to open)"></span>
     <span class="spacer"></span>
     <span id="st-pos"></span>
     <span id="st-lang"></span>
@@ -132,9 +137,9 @@
 
 <div id="launch">
   <div class="lbox">
-    <div class="llogo">☁</div>
-    <h1>Cloud Native Studio</h1>
-    <p class="lsub">Build, migrate and modernize across Google Cloud, AWS, Azure and private clouds</p>
+    <img class="llogo-img" src="assets/icon.png" alt="" />
+    <h1>Nativity Studio</h1>
+    <p class="lsub">Multi-cloud · Multi-language · Multi-service<br />Public and private cloud-native development</p>
     <div id="launch-steps"></div>
     <div id="launch-actions"></div>
   </div>
@@ -156,6 +161,11 @@
 <script src="pages.js"></script>
 <script src="run.js"></script>
 <script src="help.js"></script>
+<script src="javaparse.js"></script>
+<script src="javalib.js"></script>
+<script src="java.js"></script>
+<script src="commands.js"></script>
+<script src="compile.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

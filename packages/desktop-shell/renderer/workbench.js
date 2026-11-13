@@ -24,6 +24,14 @@ function initMonaco() {
         theme: 'cns-dark', automaticLayout: true, minimap: { enabled: true },
         fontFamily: 'Monospaced, "Courier New", monospace', // NetBeans default editor font
         fontSize: (state.settings.editor && state.settings.editor.fontSize) || 13, model: null,
+      }, {
+        openCodeEditor: async (input, source) => {
+          const sel = input.options && input.options.selection;
+          const here = source && source.getModel() && source.getModel().uri.toString() === input.resource.toString();
+          if (here) { if (sel) { source.setSelection(sel); source.revealLineInCenter(sel.startLineNumber); } return source; }
+          if (input.resource.scheme === 'file') await openAt(input.resource.fsPath, sel ? sel.startLineNumber : 1, sel ? sel.startColumn : 1);
+          return editor;
+        },
       });
       editor.onDidChangeCursorPosition((e) => ($('st-pos').textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`));
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveActive);
@@ -68,6 +76,7 @@ function activate(tab) {
   $('pages').classList.toggle('hidden', !page);
   if (!home && !page && editor) {
     editor.setModel(tab.model);
+    if (typeof updateLanguageOptions === 'function') updateLanguageOptions();
     if (tab.viewState) editor.restoreViewState(tab.viewState);
     editor.focus();
     $('st-lang').textContent = tab.model.getLanguageId();
@@ -86,15 +95,20 @@ function showHome() {
 }
 
 async function openFile(file) {
-  const existing = state.tabs.find((t) => t.path === file);
+  const sameFile = (p) => String(p || '').split('/').join(BS).toLowerCase() === file.split('/').join(BS).toLowerCase();
+  const existing = state.tabs.find((t) => t.path && sameFile(t.path));
   if (existing) return activate(existing);
   let text;
   try { text = await inv('fs:readFile', file); } catch (e) { return status(e.message, true); }
-  const model = monaco.editor.createModel(text, langFor(file));
+  const uri = monaco.Uri.file(file);
+  const stale = monaco.editor.getModel(uri);
+  if (stale) stale.dispose();
+  const model = monaco.editor.createModel(text, langFor(file), uri);
   const tab = { kind: 'file', path: file, model, saved: text, viewState: null };
-  model.onDidChangeContent(() => { renderTabs(); if (typeof onFileEdited === 'function') onFileEdited(tab); });
+  model.onDidChangeContent((e) => { renderTabs(); if (typeof onFileEdited === 'function') onFileEdited(tab); if (typeof trimDiagnostics === 'function' && !e.isFlush) trimDiagnostics(tab, e.changes); });
   state.tabs.push(tab);
   activate(tab);
+  if (typeof applyMarkersFor === 'function') applyMarkersFor(tab);
 }
 
 async function saveTab(t) {
@@ -102,6 +116,7 @@ async function saveTab(t) {
   await inv('fs:writeFile', t.path, text);
   t.saved = text;
   if (typeof afterSave === 'function') afterSave(t);
+  if (typeof javaFileSaved === 'function') javaFileSaved(t);
 }
 
 async function saveActive() {
@@ -121,7 +136,7 @@ async function closeTab(tab) {
   }
   const i = state.tabs.indexOf(tab);
   state.tabs.splice(i, 1);
-  if (tab.kind === 'file') tab.model.dispose();
+  if (tab.kind === 'file') { closedTabs.push(tab.path); tab.model.dispose(); }
   if (tab.kind === 'page') { tab.el.remove(); if (tab.onClose) tab.onClose(); }
   if (!state.tabs.length) return showHome();
   activate(state.active === tab ? state.tabs[Math.min(i, state.tabs.length - 1)] : state.active);
@@ -152,24 +167,75 @@ function markTree() {
   document.querySelectorAll('.node').forEach((n) => n.classList.toggle('sel', !!state.active && state.active.kind === 'file' && n.dataset.path === state.active.path));
 }
 
-async function buildDir(container, dir) {
+
+/* Java-style layouts (Maven, Gradle, Ant): source folders are promoted to "Source Packages" etc., and packages are shown
+   as dotted names (com.example.app) instead of nested folders. */
+const SRC_ROOTS = [
+  ['src/main/java', 'Source Packages', '☕', true], ['src/main/kotlin', 'Kotlin Packages', '☕', true], ['src/main/scala', 'Scala Packages', '☕', true], ['src/main/groovy', 'Groovy Packages', '☕', true],
+  ['src/main/resources', 'Resources', '🗂', false], ['src/main/webapp', 'Web Pages', '🌐', false],
+  ['src/test/java', 'Test Packages', '🧪', true], ['src/test/kotlin', 'Test Kotlin Packages', '🧪', true], ['src/test/resources', 'Test Resources', '🗂', false],
+];
+const BUILD_FILE = /^(pom\.xml|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|build\.xml)$/;
+
+async function promotedRoots(dir, names) {
+  if (!names.some((n) => BUILD_FILE.test(n))) return [];
+  const out = [];
+  for (const [rel, label, icon, pkg] of SRC_ROOTS) {
+    const p = joinPath(dir, rel.split('/').join(BS));
+    if (await inv('fs:exists', p).catch(() => false)) out.push({ path: p, label, icon, pkg, isDir: true, name: label });
+  }
+  if (!out.some((r) => r.label === 'Source Packages') && names.includes('build.xml') && names.includes('src')) {
+    out.unshift({ path: joinPath(dir, 'src'), label: 'Source Packages', icon: '☕', pkg: true, isDir: true, name: 'src' });
+  }
+  return out;
+}
+
+/** Collapses chains of folders that hold only one sub-folder: com / example / app  ->  com.example.app */
+async function compressPackage(entry) {
+  let cur = entry;
+  let label = entry.name;
+  for (let i = 0; i < 12; i++) {
+    let kids = [];
+    try { kids = await inv('fs:readDir', cur.path); } catch { break; }
+    if (kids.length === 1 && kids[0].isDir) { label += `.${kids[0].name}`; cur = kids[0]; } else break;
+  }
+  return { ...cur, label };
+}
+
+async function buildDir(container, dir, opts = {}) {
   let entries = [];
   try { entries = await inv('fs:readDir', dir); } catch (e) { container.append(h('div', { class: 'empty', text: e.message })); return; }
-  for (const e of entries) {
+  const addNode = (e, { label, icon, bold, expand, pkg }) => {
     const caret = h('span', { class: 'caret', text: e.isDir ? '▸' : '' });
-    const node = h('div', { class: 'node', 'data-path': e.path }, caret, h('span', { text: e.name }));
+    const node = h('div', { class: 'node' + (bold ? ' group' : ''), 'data-path': e.path, title: e.path }, caret, icon ? h('span', { class: 'ico', text: icon }) : null, h('span', { text: label || e.name }));
     const kids = h('div', { class: 'children hidden' });
     let loaded = false;
+    const toggle = async (open) => {
+      kids.classList.toggle('hidden', !open);
+      caret.textContent = open ? '▾' : '▸';
+      if (open && !loaded) { loaded = true; await buildDir(kids, e.path, { pkg }); }
+    };
     node.addEventListener('click', async () => {
       selected = e;
-      if (e.isDir) {
-        kids.classList.toggle('hidden');
-        caret.textContent = kids.classList.contains('hidden') ? '▸' : '▾';
-        if (!loaded) { loaded = true; await buildDir(kids, e.path); }
-      } else openFile(e.path);
+      if (e.isDir) await toggle(kids.classList.contains('hidden'));
+      else openFile(e.path);
     });
     node.addEventListener('contextmenu', (ev) => { ev.preventDefault(); ev.stopPropagation(); selected = e; ctxMenu(ev.clientX, ev.clientY, fileMenuItems(e)); });
     container.append(node, kids);
+    if (expand) toggle(true);
+  };
+
+  if (!opts.pkg) {
+    const roots = await promotedRoots(dir, entries.map((x) => x.name));
+    for (const r of roots) addNode(r, { label: r.label, icon: r.icon, bold: true, pkg: r.pkg, expand: r.label === 'Source Packages' });
+  }
+  for (const e0 of entries) {
+    let e = e0;
+    let label = e.name;
+    let icon = '';
+    if (opts.pkg && e.isDir) { e = await compressPackage(e0); label = e.label; icon = '📦'; }
+    else if (/\.(java|kt|scala|groovy)$/i.test(e.name)) icon = '☕';
+    addNode(e, { label, icon, pkg: opts.pkg });
   }
 }
 
@@ -220,6 +286,7 @@ async function createEntry(isDir) {
 /* ------------------------------ terminal / bottom panel ------------------------------ */
 
 let runningId = null;
+let termStdin = 0; // when set, terminal input goes to that process (e.g. a sign-in prompt) instead of starting a command
 const termWaiters = new Map(); // id -> fn(exitCode)
 const termRoutes = new Map(); // id -> fn(text, stream): send output to another panel
 const termHistory = [];
@@ -242,6 +309,7 @@ function resolveDir(cwd, target) {
 }
 
 async function termRun(line) {
+  if (termStdin) { termPrint(line + String.fromCharCode(10), 't-cmd'); tryInv('term:write', termStdin, line + String.fromCharCode(10)); return; }
   const cmd = line.trim();
   termPrint(`${promptStr()} ${cmd}\n`, 't-cmd');
   if (!cmd) return;
@@ -267,6 +335,7 @@ function showPanel(which) {
   document.querySelectorAll('#panel-bar [data-panel]').forEach((b) => b.classList.toggle('active', b.dataset.panel === which));
   $('panel-terminal').classList.toggle('hidden', which !== 'terminal');
   $('panel-output').classList.toggle('hidden', which !== 'output');
+  $('panel-problems').classList.toggle('hidden', which !== 'problems');
   if (which === 'terminal') $('term-input').focus();
 }
 

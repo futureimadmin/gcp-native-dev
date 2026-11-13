@@ -27,7 +27,7 @@ function detectDir(dir) {
     const war = /<packaging>\s*war\s*<\/packaging>/.test(pom);
     const type = quarkus ? 'Quarkus (Maven)' : spring ? 'Spring Boot (Maven)' : war ? 'Java web app (Maven, WAR)' : 'Java (Maven)';
     const tasks = [
-      { id: 'build', kind: 'build', label: 'Compile', cmd: `${mvn} -q -B compile`, needs: 'maven', auto: true },
+      { id: 'build', kind: 'build', label: 'Compile (Maven)', cmd: `${mvn} -q -B compile`, needs: 'maven' },
       { id: 'package', kind: 'build', label: 'Package', cmd: `${mvn} -B package -DskipTests`, needs: 'maven' },
       { id: 'test', kind: 'test', label: 'Test', cmd: `${mvn} -B test`, needs: 'maven' },
     ];
@@ -49,7 +49,7 @@ function detectDir(dir) {
     const spring = /spring-boot|org\.springframework\.boot/.test(g);
     const quarkus = /quarkus/.test(g);
     const tasks = [
-      { id: 'build', kind: 'build', label: 'Compile', cmd: `${gw} -q classes`, needs: 'gradle', auto: true },
+      { id: 'build', kind: 'build', label: 'Compile (Gradle)', cmd: `${gw} -q classes`, needs: 'gradle' },
       { id: 'package', kind: 'build', label: 'Build', cmd: `${gw} build -x test`, needs: 'gradle' },
       { id: 'test', kind: 'test', label: 'Test', cmd: `${gw} test`, needs: 'gradle' },
     ];
@@ -124,6 +124,20 @@ function detectBuild(ws) {
     for (const e of fs.readdirSync(ws, { withFileTypes: true })) {
       if (e.isDirectory() && !SKIP.has(e.name) && !e.name.startsWith('.')) out.push(...detectDir(path.join(ws, e.name)));
     }
+  }
+  if (!out.length) {
+    let hasJava = false;
+    const scan = (d, depth) => {
+      if (hasJava || depth > 10) return;
+      let es = [];
+      try { es = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+      for (const e of es) {
+        if (e.isFile() && e.name.endsWith('.java')) { hasJava = true; return; }
+        if (e.isDirectory() && !SKIP.has(e.name) && !e.name.startsWith('.')) scan(path.join(d, e.name), depth + 1);
+      }
+    };
+    scan(ws, 0);
+    if (hasJava) out.push({ type: 'Java (plain)', dir: ws, rel: path.basename(ws), java: true, tasks: [{ id: 'build', kind: 'build', label: 'Compile (built-in javac)', cmd: 'javac', needs: 'java' }] });
   }
   return out;
 }

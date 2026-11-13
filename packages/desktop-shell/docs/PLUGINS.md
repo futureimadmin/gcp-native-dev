@@ -1,4 +1,4 @@
-# Cloud Native Studio plugin guide
+# Nativity Studio plugin guide
 
 Almost everything in the IDE is a plugin: the Google Cloud, AWS, Azure and Kubernetes connectors, the AI assistants,
 the New Project templates and the Modernize & Migrate view are all built-in plugins under `src/plugins/builtin/`.
@@ -32,7 +32,7 @@ my-plugin/
 
 ## Installing and trust
 
-Drop the folder into `%APPDATA%\Cloud Native Studio\plugins\` (Settings > Plugins > Open plugins folder).
+Drop the folder into `%APPDATA%\Nativity Studio\plugins\` (Settings > Plugins > Open plugins folder).
 Built-in plugins are trusted. **Third-party plugins run with full access to your files and credentials**, so they stay
 disabled until you enable them in Settings > Plugins and confirm the warning. Restart the IDE to apply.
 

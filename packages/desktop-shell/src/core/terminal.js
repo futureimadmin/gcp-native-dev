@@ -20,6 +20,12 @@ function create({ sendToRenderer, envProvider }) {
     return id;
   }
 
+  function write(id, text) {
+    const c = procs.get(id);
+    if (!c || !c.stdin || c.stdin.destroyed) throw new Error('That process is not running.');
+    c.stdin.write(String(text).slice(0, 4000));
+  }
+
   function kill(id) {
     const c = procs.get(id);
     if (c) killTree(c);
@@ -42,7 +48,7 @@ function create({ sendToRenderer, envProvider }) {
     child.unref();
   }
 
-  return { start, kill, killAll, openWindow };
+  return { start, write, kill, killAll, openWindow };
 }
 
 module.exports = { create };

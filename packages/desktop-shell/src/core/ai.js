@@ -17,7 +17,9 @@ function validateMessages(messages) {
 
 const URL_OK = /^(https:\/\/[A-Za-z0-9.-]+(:\d+)?(\/[A-Za-z0-9._~/-]*)?|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/[A-Za-z0-9._~/-]*)?)$/;
 
-function register({ ipcMain, wrap, host, store, secrets, terminal }) {
+function register({ ipcMain, wrap, host, store, secrets, terminal, send }) {
+  const streams = new Map();
+  let streamSeq = 0;
   const installed = new Map();
   async function isInstalled(cmd) {
     if (installed.has(cmd)) return installed.get(cmd);
@@ -43,6 +45,8 @@ function register({ ipcMain, wrap, host, store, secrets, terminal }) {
       ready: st ? !!st.signedIn : (p.needsKey === false || keySet),
       statusText: st ? (st.detail || '') : '',
       canLogin: !!p.login,
+      streaming: typeof p.chatStream === 'function',
+      canEdit: !!p.canEdit,
       baseUrl: p.configurableBaseUrl ? store.get(`ai.${p.id}.baseUrl`, p.defaultBaseUrl || '') : '',
       configurableBaseUrl: !!p.configurableBaseUrl,
       help: p.help || '',
@@ -96,14 +100,33 @@ function register({ ipcMain, wrap, host, store, secrets, terminal }) {
     }
   }));
 
-  /** Sign in with the provider's own flow (e.g. 'claude auth login'), in a console window. Nothing is typed for you. */
+  /** Returns the provider's own sign-in command; the IDE runs it in its built-in terminal panel (no separate window). */
   ipcMain.handle('ai:login', wrap(async (id) => {
     const p = host.ai.get(id);
     if (!p || !p.login) throw new Error('This provider has no sign-in flow.');
     if (p.login.url) return { url: p.login.url };
-    terminal.openWindow(`${p.name} sign-in`, commandLine(p.login.cmd, p.login.args || []), host.getWorkspace() || undefined);
-    return { opened: true };
+    return { command: commandLine(p.login.cmd, p.login.args || []) };
   }));
+
+  /** Streaming chat: events arrive on 'ai:stream' as {streamId, type: session|delta|tool|result|error|done}. */
+  ipcMain.handle('ai:chatStream', wrap(async (id, req) => {
+    const p = host.ai.get(id);
+    if (!p || typeof p.chatStream !== 'function') throw new Error('This provider does not support streaming.');
+    const messages = validateMessages(req.messages);
+    const model = String(req.model || store.get(`ai.${id}.model`, p.defaultModel || ''));
+    if (!/^[A-Za-z0-9._:/-]{0,100}$/.test(model)) throw new Error('Invalid model name.');
+    const session = req.session && /^[A-Za-z0-9-]{8,80}$/.test(String(req.session)) ? String(req.session) : '';
+    const streamId = ++streamSeq;
+    const ctl = new AbortController();
+    streams.set(streamId, ctl);
+    const emit = (evt) => send('ai:stream', { streamId, ...evt });
+    Promise.resolve()
+      .then(() => p.chatStream({ model, system: String(req.system || '').slice(0, 20000), messages, session, edits: !!req.edits, cwd: host.getWorkspace() || undefined, signal: ctl.signal }, emit))
+      .catch((e) => emit({ type: 'error', message: String((e && e.message) || e) }))
+      .finally(() => { streams.delete(streamId); emit({ type: 'done' }); });
+    return streamId;
+  }));
+  ipcMain.handle('ai:cancel', wrap(async (streamId) => { const c = streams.get(streamId); if (c) c.abort(); }));
 
   ipcMain.handle('ai:launchCli', wrap(async (id, ws) => {
     const a = host.cli.get(id);

@@ -5,6 +5,7 @@
 
 const CORE_VIEWS = [
   { id: 'explorer', title: 'Explorer', icon: '📁' },
+  { id: 'search', title: 'Search (Ctrl+Shift+F)', icon: '🔍' },
   { id: 'run', title: 'Run & Servers', icon: '▶' },
   { id: 'clouds', title: 'Clouds', icon: '☁' },
 ];
@@ -32,6 +33,7 @@ function showView(id) {
   document.body.classList.remove('side-hidden');
   if (id === 'clouds') renderCloudView();
   if (id === 'run') renderRunView($('view-run'));
+  if (id === 'search') renderSearchView($('view-search'));
   const pv = CNS.views.find((v) => v.id === id);
   if (pv) {
     const box = $(`view-${id}`);
@@ -81,6 +83,7 @@ function registerCommands() {
   C('view.terminal', togglePanel, 'View: Toggle Terminal');
   C('ai.toggle', () => toggleAi(), 'AI: Toggle Assistant');
   C('ai.cli', (id) => launchCli(id));
+  C('ai.claude', openClaude, 'AI: Claude Code (in the IDE)');
   C('palette.open', openPalette);
   C('cloud.login', (id) => cloudLogin(id));
   C('cloud.toggleMode', () => (cnOn() ? disableMode() : enableMode()), 'Cloud: Enable / Disable Cloud Native Development');
@@ -95,7 +98,7 @@ function registerCommands() {
   C('help.plugins', () => openHelp('plugins'), 'Help: Plugin development guide');
   C('help.about', () => openSettings('about'), 'Help: About');
   for (const c of state.clouds) C(`cloud.signin.${c.id}`, () => cloudLogin(c.id), `Cloud: Sign in to ${c.name}`);
-  for (const a of ['claude-code', 'gemini-cli', 'codex-cli']) C(`ai.cli.${a}`, () => launchCli(a), `AI: Launch ${a} in a terminal window`);
+  for (const a of ['gemini-cli', 'codex-cli']) C(`ai.cli.${a}`, () => launchCli(a), `AI: Open ${a} in a console window`);
 }
 
 /* ------------------------------ command palette ------------------------------ */
@@ -152,9 +155,11 @@ async function main() {
     state.plugins = await inv('host:plugins');
     await loadClouds();
     registerCommands();
+    registerEditorCommands();
     wireWorkbench();
     wireLayout();
     wireRun();
+    wireCompile();
     wireAi();
     wireToolbar();
     document.addEventListener('click', () => $('ctx').classList.add('hidden'));
@@ -174,7 +179,7 @@ async function main() {
 
     // Editor and cloud checks run together behind the splash screen.
     await Promise.all([
-      initMonaco().catch((e) => $('home').append(h('p', { class: 't-err', text: `Editor failed to load: ${e.message}` }))),
+      initMonaco().then(setupEditorFeatures).catch((e) => $('home').append(h('p', { class: 't-err', text: `Editor failed to load: ${e.message}` }))),
       runLaunch(),
     ]);
 

@@ -2,7 +2,7 @@
   "name": "@cnd-studio/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloud Native Studio — standalone multi-cloud IDE (GCP, AWS, Azure)",
+  "description": "Nativity Studio — multi-cloud, multi-language, multi-service IDE for public and private cloud-native development",
   "author": "FutureIM",
   "main": "src/main.js",
   "scripts": {
@@ -21,8 +21,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "in.futureim.cloudnativestudio",
-    "productName": "Cloud Native Studio",
+    "appId": "in.futureim.nativitystudio",
+    "productName": "Nativity Studio",
     "directories": { "output": "release" },
     "files": [
       "src/**/*",
@@ -31,6 +31,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "renderer/assets/icon.ico",
       "signAndEditExecutable": false,
       "target": [{ "target": "nsis", "arch": ["x64"] }]
     },
@@ -41,6 +42,6 @@
       "createStartMenuShortcut": true
     }
   },
-  "productName": "Cloud Native Studio",
+  "productName": "Nativity Studio",
   "license": "Apache-2.0"
 }

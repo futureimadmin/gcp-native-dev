@@ -8,7 +8,7 @@ const H2 = (text) => ['h2', text];
 const HELP = [
   { id: 'start', title: 'Getting started', body: [
     ['h1', 'Getting started'],
-    P('Cloud Native Studio is an IDE for building applications and running them on Google Cloud, AWS, Azure and private clouds (Kubernetes). It combines an editor, a build/run/debug toolbar, cloud connections, AI assistants and migration tools in one window.'),
+    P('Nativity Studio is an IDE for building applications and running them on Google Cloud, AWS, Azure and private clouds (Kubernetes). It combines an editor, a build/run/debug toolbar, cloud connections, AI assistants and migration tools in one window.'),
     H2('What happens when it starts'),
     UL('The IDE looks for Google Cloud Application Default Credentials (ADC). If none exist it offers to sign you in; if they exist it shows the project stored in them.',
       'AWS, Azure and Kubernetes are checked in the background. Each cloud you are signed in to appears as a coloured dot in the toolbar.',
@@ -29,9 +29,10 @@ const HELP = [
     UL('The editor is Monaco (the engine behind VS Code): syntax colouring for most languages, multi-cursor, find/replace, code folding and a minimap.',
       'Fonts follow NetBeans defaults: Segoe UI for the interface and Monospaced for code.',
       'Auto-save: files save about a second after you stop typing, and when the window loses focus. Change this in Settings > General (After delay, On focus loss, Off).',
-      'Auto-build: when you save a Java, Kotlin, TypeScript, Go or C# file, the IDE compiles the project in the background and shows the result in the status bar and the OUTPUT panel. It pauses while an app is running, because dev servers recompile on their own.'),
+      'Java has a built-in compiler (the JDK javac, no Maven or Gradle needed). It checks your project in the background right after you save or auto-save, and after you pause typing for 5 or 10 seconds (your choice in Settings > General); unsaved edits are included. A problem shows as a small red dot in the margin; hover the dot or the code to read the message. Every problem is listed in the PROBLEMS tab with file, line and message; click a row to open the file at that line.',
+      'Build (Ctrl+F9) compiles on demand and also prints the result in OUTPUT. Maven dependencies are resolved once and cached.'),
     H2('Bottom panel'),
-    P('TERMINAL runs commands in your project folder (it is a command runner, not a full terminal emulator; use the AI menu to open Claude Code or Gemini CLI in a real console window). OUTPUT shows build and test results.'),
+    P('TERMINAL runs commands in your project folder (it is a command runner, not a full terminal emulator; Claude Code runs in the AI panel). OUTPUT shows build and test results with clickable error lines; PROBLEMS lists compile errors and warnings.'),
   ] },
 
   { id: 'projects', title: 'Languages & frameworks', body: [
@@ -104,8 +105,10 @@ const HELP = [
       'Gemini (your Google Cloud login): uses the same Application Default Credentials as the Google Cloud connection and calls Vertex AI in your project. Your project needs the Vertex AI API enabled and the Vertex AI User role.'),
     H2('API-key providers'),
     P('Claude, Gemini, Grok and any OpenAI-compatible endpoint can also be used with an API key. Keys are encrypted with the Windows keystore and never shown again. Pointing the OpenAI-compatible option at a local server such as Ollama keeps your code on this computer.'),
-    H2('Terminal agents'),
-    P('Claude Code, Gemini CLI and Codex CLI can also be opened in a real console window in your project folder from the AI menu. They use their own sign-in and can edit files; the chat panel does not.'),
+    H2('Claude Code inside the IDE'),
+    P('Choose "Claude Code (your Claude login)" in the AI panel. It runs in this window (no console window), keeps the conversation going between messages, streams the answer as it is written and shows each tool it uses (for example Read or Grep). By default it can read your project but not change it. Tick "Allow Claude to edit files in this project" to let it make edits; the Explorer and any open, unmodified files refresh when it finishes. Use Git so you can review and undo changes. Press Stop to cancel a running answer, and New chat to start a fresh session.'),
+    H2('Other terminal agents'),
+    P('Gemini CLI and Codex CLI are full-screen terminal programs and still open in their own console window from the AI menu. Claude Code no longer does.'),
   ] },
 
   { id: 'modernize', title: 'Modernize & migrate', body: [
@@ -135,13 +138,36 @@ const HELP = [
     P('A complete reference of the main-process API (ctx.cloud, ctx.ai, ctx.templates, ctx.analyzers, ctx.ipc, ctx.exec, ctx.settings, ctx.secrets) and the renderer API (views, commands, toolbar, ui helpers) is in docs/PLUGINS.md in the IDE installation folder, with a VMware vSphere skeleton under examples/.'),
   ] },
 
+  { id: 'java', title: 'Java & code editing', body: [
+    ['h1', 'Java and code editing'],
+    P('For Maven and Gradle projects (and Ant-style src folders) the Explorer shows Source Packages, Resources, Web Pages, Test Packages and Test Resources at the top, and shows packages as dotted names such as com.example.app instead of nested folders.'),
+    H2('Completion (Ctrl+Space)'),
+    P('Java completion is based on your project and the most-used JDK classes, so the list is short and relevant: after a dot you see only the members of that expression (variables, method results, this, new X(), String literals, System.out). Without a dot you see local variables, members of the current class, matching class names (type capitals such as HM for HashMap) and a few snippets such as sout, fori and psvm. Choosing a class adds its import automatically.'),
+    H2('Finding things'),
+    UL('Ctrl+F finds in the file; Ctrl+H finds and replaces. Ctrl+Shift+F searches the whole project, Ctrl+Shift+H replaces across files (you confirm first).',
+      'Ctrl+P goes to a file by name. Ctrl+Shift+T opens a Java class (type HM for HashMap-style names). Ctrl+T goes to any class, method or field in the project.',
+      'Ctrl+Shift+O lists symbols in the file; Ctrl+F12 lists the methods and fields; Navigate > List Methods of Class shows another class.',
+      'F12 goes to a definition, Shift+F12 finds usages, Ctrl+Alt+B shows implementations, Ctrl+U goes to the supertype, F4 opens the Type Hierarchy page (supertypes, subtypes and members).',
+      'Alt+Left and Alt+Right move back and forward through places you jumped from.'),
+    H2('Source menu'),
+    UL('Generate getters, setters, constructor, toString and equals/hashCode; override inherited methods (Alt+Insert).', 'Organize Imports (Ctrl+Alt+O) removes unused imports, adds missing ones for known classes and sorts them.', 'Format Document (Shift+Alt+F) re-indents Java; Rename Symbol (F2) renames within the file.', 'File > New Java creates a class, interface, enum, record, annotation, a class with main() or a JUnit 5 test in the right package.'),
+    H2('Many more editing commands'),
+    P('The Edit menu has sub-menus for lines (duplicate, move, delete, join, sort, remove duplicates), selection (expand, multi-cursor), case transforms, folding and indentation. Everything is also in the command palette (Ctrl+Shift+P).'),
+  ] },
+
   { id: 'keys', title: 'Keyboard shortcuts', body: [
     ['h1', 'Keyboard shortcuts'],
     ['table', [
-      ['New project', 'Ctrl+Shift+N'], ['Open folder', 'Ctrl+O'], ['Save / Save all', 'Ctrl+S / Ctrl+Alt+S'], ['Command palette', 'Ctrl+Shift+P'],
+      ['New project / New Java class', 'Ctrl+Shift+N / Ctrl+Alt+N'], ['Open folder', 'Ctrl+O'], ['Save / Save all', 'Ctrl+S / Ctrl+Alt+S'], ['Close tab', 'Ctrl+W'], ['Command palette', 'Ctrl+Shift+P'],
+      ['Find / Replace', 'Ctrl+F / Ctrl+H'], ['Find next / previous', 'F3 / Shift+F3'], ['Find / Replace in files', 'Ctrl+Shift+F / Ctrl+Shift+H'], ['Select next occurrence / all', 'Ctrl+D / Ctrl+Shift+L'],
+      ['Go to file / line', 'Ctrl+P / Ctrl+G'], ['Open Java class', 'Ctrl+Shift+T'], ['Go to symbol (workspace / file)', 'Ctrl+T / Ctrl+Shift+O'], ['List methods', 'Ctrl+F12'],
+      ['Go to definition / usages', 'F12 / Shift+F12'], ['Peek definition', 'Alt+F12'], ['Implementations', 'Ctrl+Alt+B'], ['Supertype', 'Ctrl+U'], ['Type hierarchy', 'F4'], ['Back / forward', 'Alt+Left / Alt+Right'],
+      ['Complete / parameter hints', 'Ctrl+Space / Ctrl+Shift+Space'], ['Quick fix', 'Ctrl+.'], ['Rename', 'F2'], ['Format document', 'Shift+Alt+F'], ['Organize imports', 'Ctrl+Alt+O'], ['Generate code', 'Alt+Insert'],
+      ['Comment line / block', 'Ctrl+/ / Shift+Alt+A'], ['Move line up / down', 'Alt+Up / Alt+Down'], ['Duplicate line', 'Shift+Alt+Down'], ['Delete line', 'Ctrl+Shift+K'], ['Add cursor above / below', 'Ctrl+Alt+Up / Ctrl+Alt+Down'],
+      ['Expand / shrink selection', 'Shift+Alt+Right / Shift+Alt+Left'], ['Fold / unfold', 'Ctrl+Shift+[ / Ctrl+Shift+]'], ['Toggle word wrap', 'Alt+Z'],
       ['Toggle sidebar', 'Ctrl+B'], ['Explorer / Clouds', 'Ctrl+Shift+E / Ctrl+Shift+C'], ['Toggle terminal', 'Ctrl+`'], ['Maximize / restore bottom panel', 'Ctrl+Shift+M'],
-      ['Focus mode', 'Ctrl+K Z, Esc to leave'], ['AI assistant', 'Ctrl+Shift+A'], ['Build', 'Ctrl+F9'], ['Run', 'F5'], ['Debug', 'Ctrl+F5'], ['Stop', 'Shift+F5'],
-      ['Settings', 'Ctrl+,'], ['Help', 'F1'],
+      ['Focus mode', 'Ctrl+K Z, Esc to leave'], ['AI assistant', 'Ctrl+Shift+A'], ['Build / Run / Debug / Stop', 'Ctrl+F9 / F5 / Ctrl+F5 / Shift+F5'], ['Run this file', 'Ctrl+Shift+F10'],
+      ['Next / previous tab', 'Ctrl+PageDown / Ctrl+PageUp'], ['Settings', 'Ctrl+,'], ['Help', 'F1'],
     ]],
   ] },
 

@@ -14,7 +14,7 @@ const run = {
 
 const editorCfg = () => state.settings.editor || {};
 const autoSaveMode = () => editorCfg().autoSave || 'afterDelay';
-const autoBuildOn = () => editorCfg().autoBuild !== false;
+const autoBuildOn = () => editorCfg().autoBuild === true; // off unless you switch it on in Settings
 
 /* ------------------------------ detection ------------------------------ */
 
@@ -28,6 +28,7 @@ async function detectBuildEnv() {
   if (run.sel >= run.projects.length) run.sel = 0;
   renderRunConfig();
   if (!$('view-run').classList.contains('hidden')) renderRunView($('view-run'));
+  if (currentProject() && currentProject().java && typeof scheduleJavaCheck === 'function') scheduleJavaCheck(2500); // first check when a Java project opens
 }
 
 function renderRunConfig() {
@@ -95,6 +96,7 @@ async function startTask(proj, task, where) {
 async function doBuild(auto) {
   const proj = currentProject();
   if (!proj) return status('Open a project first.', true);
+  if (proj.java && typeof javaCompile === 'function') return javaCompile({ auto: !!auto }); // Java uses the built-in javac
   const task = taskOf(proj, 'build');
   if (!task) return status('Nothing to build for this project.', true);
   if (run.building) return;
@@ -169,6 +171,8 @@ async function doTest() {
 /* ------------------------------ auto-save / auto-build ------------------------------ */
 
 function onFileEdited(tab) {
+  // Java: check for errors after you pause typing (this compiles your unsaved text too)
+  if (tab.kind === 'file' && /\.java$/i.test(tab.path) && typeof checkDelayMs === 'function' && checkDelayMs() > 0) scheduleJavaCheck(checkDelayMs());
   if (autoSaveMode() !== 'afterDelay' || tab.kind !== 'file') return;
   clearTimeout(run.saveTimers.get(tab));
   run.saveTimers.set(tab, setTimeout(async () => {
@@ -179,7 +183,9 @@ function onFileEdited(tab) {
 
 /** Called after any successful save: kick off a debounced background compile for source files. */
 function afterSave(tab) {
-  if (!autoBuildOn() || !state.workspace || run.proc || !/\.(java|kt|ts|go|cs)$/i.test(tab.path)) return;
+  if (!state.workspace || (typeof dx !== 'undefined' && dx.saving)) return;
+  if (/\.java$/i.test(tab.path)) { scheduleJavaCheck(800); return; } // Java: check for errors right after a save or auto-save
+  if (!autoBuildOn() || run.proc || !/\.(kt|ts|go|cs)$/i.test(tab.path)) return;
   const idx = run.projects.findIndex((p) => tab.path.toLowerCase().startsWith(p.dir.toLowerCase()) && taskOf(p, 'build') && taskOf(p, 'build').auto);
   if (idx < 0) return;
   clearTimeout(run.buildTimer);

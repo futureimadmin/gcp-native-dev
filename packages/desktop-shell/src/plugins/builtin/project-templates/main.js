@@ -4,7 +4,7 @@ const GITIGNORE = 'node_modules/\n.env\n.env.*\n*.log\ndist/\n__pycache__/\n.ven
 const slug = (n) => String(n).toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '') || 'app';
 const json = (o) => `${JSON.stringify(o, null, 2)}\n`;
 
-const readme = (name, body) => `# ${name}\n\n${body}\n\nCreated with Cloud Native Studio. Right-click the project > **Enable Cloud Native Development** to connect it to a cloud.\n`;
+const readme = (name, body) => `# ${name}\n\n${body}\n\nCreated with Nativity Studio. Right-click the project > **Enable Cloud Native Development** to connect it to a cloud.\n`;
 
 exports.activate = (ctx) => {
   require('./more').register(ctx);
@@ -14,7 +14,7 @@ exports.activate = (ctx) => {
     description: 'Express service with /healthz and a Dockerfile. Runs on Cloud Run, ECS/App Runner, Azure Container Apps or Kubernetes.',
     files: (name) => ({
       'package.json': json({ name: slug(name), version: '1.0.0', main: 'server.js', scripts: { start: 'node server.js' }, dependencies: { express: '^4.19.2' } }),
-      'server.js': "const express = require('express');\nconst app = express();\n\napp.get('/healthz', (_req, res) => res.json({ status: 'ok' }));\napp.get('/', (_req, res) => res.send('Hello from Cloud Native Studio'));\n\nconst port = process.env.PORT || 8080;\napp.listen(port, () => console.log(`listening on ${port}`));\n",
+      'server.js': "const express = require('express');\nconst app = express();\n\napp.get('/healthz', (_req, res) => res.json({ status: 'ok' }));\napp.get('/', (_req, res) => res.send('Hello from Nativity Studio'));\n\nconst port = process.env.PORT || 8080;\napp.listen(port, () => console.log(`listening on ${port}`));\n",
       Dockerfile: 'FROM node:22-slim\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev\nCOPY . .\nENV PORT=8080\nEXPOSE 8080\nUSER node\nCMD ["node", "server.js"]\n',
       '.dockerignore': 'node_modules\n.git\n.env\n',
       '.gitignore': GITIGNORE,
@@ -27,7 +27,7 @@ exports.activate = (ctx) => {
     description: 'FastAPI app with /healthz and a Dockerfile.',
     files: (name) => ({
       'requirements.txt': 'fastapi>=0.110\nuvicorn[standard]>=0.29\n',
-      'main.py': "from fastapi import FastAPI\n\napp = FastAPI()\n\n\n@app.get('/healthz')\ndef healthz():\n    return {'status': 'ok'}\n\n\n@app.get('/')\ndef index():\n    return {'message': 'Hello from Cloud Native Studio'}\n",
+      'main.py': "from fastapi import FastAPI\n\napp = FastAPI()\n\n\n@app.get('/healthz')\ndef healthz():\n    return {'status': 'ok'}\n\n\n@app.get('/')\ndef index():\n    return {'message': 'Hello from Nativity Studio'}\n",
       Dockerfile: 'FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nENV PORT=8080\nEXPOSE 8080\nRUN useradd -m app\nUSER app\nCMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]\n',
       '.dockerignore': '.venv\n__pycache__\n.git\n.env\n',
       '.gitignore': GITIGNORE,
@@ -69,7 +69,7 @@ exports.activate = (ctx) => {
     id: 'static-site', name: 'Static website (nginx container)', language: 'HTML', cloud: 'any',
     description: 'A static site served by nginx. Good first migration target.',
     files: (name) => ({
-      'index.html': `<!doctype html>\n<html lang="en">\n<head><meta charset="utf-8"><title>${slug(name)}</title></head>\n<body><h1>${slug(name)}</h1><p>Hello from Cloud Native Studio.</p></body>\n</html>\n`,
+      'index.html': `<!doctype html>\n<html lang="en">\n<head><meta charset="utf-8"><title>${slug(name)}</title></head>\n<body><h1>${slug(name)}</h1><p>Hello from Nativity Studio.</p></body>\n</html>\n`,
       Dockerfile: 'FROM nginx:alpine\nCOPY index.html /usr/share/nginx/html/index.html\nEXPOSE 80\n',
       '.gitignore': GITIGNORE,
       'README.md': readme(name, 'Static site.'),
