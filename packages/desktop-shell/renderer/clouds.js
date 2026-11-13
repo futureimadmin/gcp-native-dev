@@ -196,7 +196,7 @@ function inventoryNode(id) {
   for (const it of inv_.items) by.set(it.category, [...(by.get(it.category) || []), it]);
   return h('div', {}, ...[...by.entries()].flatMap(([cat, list]) => [
     h('div', { class: 'cat', text: cat }),
-    ...list.map((it) => h('div', { class: 'svc', title: it.error || 'Open in console', onclick: () => it.url && inv('shell:openExternal', it.url).catch(() => {}) },
+    ...list.map((it) => h('div', { class: 'svc', title: it.error || 'Open in the workspace', onclick: () => openExplorer(id, it) },
       h('span', { text: it.title }), h('small', { class: it.error ? 't-err' : '', text: it.detail || '' }))),
   ]));
 }

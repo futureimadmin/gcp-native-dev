@@ -13,6 +13,8 @@ const { PluginHost } = require('./core/pluginhost');
 const cloudflow = require('./core/cloudflow');
 const projects = require('./core/projects');
 const ai = require('./core/ai');
+const toolsMod = require('./core/tools');
+const runtime = require('./core/runtime');
 
 const DEV = process.argv.includes('--dev') || !!process.env.CND_DEBUG;
 let win = null;
@@ -35,8 +37,10 @@ let store;
 let secrets;
 let terminal;
 let host;
+let tools;
 
 function boot() {
+  toolsMod.augmentPath();
   const ud = app.getPath('userData');
   store = new Store(path.join(ud, 'settings.json'), {
     editor: { fontSize: 13 },
@@ -44,6 +48,8 @@ function boot() {
     envOverrides: {},
     recents: [],
   });
+  tools = toolsMod.create(store);
+  tools.applyOverrides();
   secrets = new Secrets(path.join(ud, 'secrets.json'), safeStorage);
   terminal = terminalMod.create({ sendToRenderer, envProvider: () => ({ ...process.env, ...(store.get('envOverrides', {}) || {}) }) });
   host = new PluginHost({
@@ -56,15 +62,34 @@ function boot() {
   cloudflow.register({ ipcMain, wrap, host, terminal, send: sendToRenderer });
   projects.register({ ipcMain, wrap, host, send: sendToRenderer, store });
   ai.register({ ipcMain, wrap, host, store, secrets, terminal });
+  runtime.register({ ipcMain, wrap, tools });
 }
 
 /* ------------------------------ window & menu ------------------------------ */
+
+/** The in-IDE browser (cloud consoles, local servers) is a locked-down webview: no Node, own storage partition, http(s) only. */
+app.on('web-contents-created', (_e, contents) => {
+  if (contents.getType() === 'webview') {
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    contents.on('will-navigate', (e, u) => { if (!/^https?:\/\//i.test(u)) e.preventDefault(); });
+  }
+  contents.on('will-attach-webview', (event, webPreferences, params) => {
+    delete webPreferences.preload;
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    params.partition = 'persist:cns-browser';
+    params.allowpopups = false;
+    const ok = /^https:\/\//i.test(params.src || '') || /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(params.src || '');
+    if (!ok) event.preventDefault();
+  });
+});
 
 function createWindow() {
   win = new BrowserWindow({
     width: 1500, height: 940, minWidth: 1000, minHeight: 620,
     title: 'Cloud Native Studio', backgroundColor: '#0e0f0c', show: false,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, sandbox: true },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: true },
   });
   win.once('ready-to-show', () => win.show());
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
@@ -123,7 +148,26 @@ function buildMenu() {
         cmd('Terminal', 'view.terminal', 'CmdOrCtrl+`'),
         cmd('Command Palette…', 'palette.open', 'CmdOrCtrl+Shift+P'),
         sep,
+        cmd('Toggle Sidebar', 'layout.sidebar', 'CmdOrCtrl+B'),
+        cmd('Maximize / Restore Bottom Panel', 'layout.panelMax', 'CmdOrCtrl+Shift+M'),
+        cmd('Focus Editor (hide all panels)', 'layout.focus', 'CmdOrCtrl+K Z'),
+        cmd('Servers', 'view.servers'),
+        sep,
         { role: 'reload' }, { role: 'toggleDevTools' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Run',
+      submenu: [
+        cmd('Build', 'run.build', 'CmdOrCtrl+F9'),
+        cmd('Run', 'run.run', 'F5'),
+        cmd('Debug', 'run.debug', 'CmdOrCtrl+F5'),
+        cmd('Test', 'run.test'),
+        cmd('Stop', 'run.stop', 'Shift+F5'),
+        sep,
+        cmd('Run Configurations…', 'view.run'),
+        cmd('Servers (Tomcat, local ports)…', 'view.servers'),
+        cmd('Runtimes…', 'runtimes.open'),
       ],
     },
     {
@@ -162,7 +206,17 @@ function buildMenu() {
       ],
     },
     ...(contributed('tools').length ? [{ label: 'Tools', submenu: contributed('tools') }] : []),
-    { label: 'Help', submenu: [cmd('Plugin Guide', 'help.plugins'), cmd('About Cloud Native Studio', 'help.about')] },
+    {
+      label: 'Help',
+      submenu: [
+        cmd('Help Contents', 'help.open', 'F1'),
+        cmd('Getting Started', 'help.open', undefined, 'start'),
+        cmd('Plugin Development Guide', 'help.open', undefined, 'plugins'),
+        cmd('Keyboard Shortcuts', 'help.open', undefined, 'keys'),
+        sep,
+        cmd('About Cloud Native Studio', 'help.about'),
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -210,7 +264,7 @@ function registerCoreIpc() {
 
   ipcMain.handle('settings:get', wrap(async () => store.all()));
   ipcMain.handle('settings:set', wrap(async (key, val) => {
-    if (!/^(editor|startup|ui|cloud|workspace|envOverrides)(\.|$)/.test(key)) throw new Error('That setting cannot be changed from the UI.');
+    if (!/^(editor|startup|ui|cloud|workspace|envOverrides|run)(\.|$)/.test(key)) throw new Error('That setting cannot be changed from the UI.');
     store.set(key, val);
   }));
   ipcMain.handle('secret:available', wrap(async () => secrets.available()));

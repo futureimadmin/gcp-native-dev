@@ -10,7 +10,7 @@ async function openSettings(tab) {
   const nav = h('div', { class: 'snav' });
   const pane = h('div', { class: 'spane' });
   body.append(nav, pane);
-  const tabs = { general: ['General', generalPane], clouds: ['Clouds', cloudsPane], ai: ['AI', aiPane], plugins: ['Plugins', pluginsPane], about: ['About', aboutPane] };
+  const tabs = { general: ['General', generalPane], runtimes: ['Runtimes', runtimesPane], clouds: ['Clouds', cloudsPane], ai: ['AI', aiPane], plugins: ['Plugins', pluginsPane], about: ['About', aboutPane] };
   const close = modal('Settings', body, [h('button', { class: 'primary', text: 'Done', onclick: () => { close(); renderAiPanel(); renderHome(); } })], { wide: true });
   const show = (id) => {
     nav.replaceChildren(...Object.entries(tabs).map(([k, [label]]) => h('button', { class: k === id ? 'active' : '', text: label, onclick: () => show(k) })));
@@ -24,10 +24,38 @@ function generalPane() {
   size.onchange = async () => { const n = Math.max(8, Math.min(32, Number(size.value) || 13)); await tryInv('settings:set', 'editor.fontSize', n); state.settings.editor = { ...(state.settings.editor || {}), fontSize: n }; setEditorFontSize(n); };
   const prompt = h('input', { type: 'checkbox', checked: !state.settings.startup || state.settings.startup.promptLogin !== false });
   prompt.onchange = async () => { await tryInv('settings:set', 'startup.promptLogin', prompt.checked); state.settings.startup = { ...(state.settings.startup || {}), promptLogin: prompt.checked }; };
+  const mode = h('select', {}, [['afterDelay', 'After a short delay (about 1 second)'], ['onBlur', 'When the window loses focus'], ['off', 'Off (save manually)']].map(([v, t]) => h('option', { value: v, text: t, selected: v === ((state.settings.editor || {}).autoSave || 'afterDelay') })));
+  mode.onchange = async () => { await tryInv('settings:set', 'editor.autoSave', mode.value); state.settings.editor = { ...(state.settings.editor || {}), autoSave: mode.value }; };
+  const build = h('input', { type: 'checkbox', checked: (state.settings.editor || {}).autoBuild !== false });
+  build.onchange = async () => { await tryInv('settings:set', 'editor.autoBuild', build.checked); state.settings.editor = { ...(state.settings.editor || {}), autoBuild: build.checked }; };
   return h('div', {}, h('h3', { text: 'General' }),
     h('label', { text: 'Editor font size' }), size,
+    h('label', { text: 'Auto-save' }), mode,
+    h('label', { class: 'inline' }, build, ' Compile in the background when I save a source file (Java, Kotlin, TypeScript, Go, C#)'),
     h('label', { class: 'inline' }, prompt, ' Ask me to sign in to Google Cloud at startup when no Application Default Credentials are found'),
     h('p', { class: 'hint', text: 'Fonts follow the NetBeans defaults: Segoe UI for the interface, Monospaced for the editor.' }));
+}
+
+function runtimesPane() {
+  const box = h('div', {}, h('h3', { text: 'Runtimes' }),
+    h('p', { class: 'hint', text: 'Tools the IDE uses to build, run and debug your projects. Choose an install folder to override what is on your PATH (for example a different JDK). Applies immediately.' }));
+  const list = h('div', {}, h('div', { class: 'hint', text: 'Detecting…' }));
+  box.append(list);
+  const draw = (rows) => list.replaceChildren(...rows.map((r) => h('div', { class: 'card' },
+    h('div', { class: 'cardh' }, h('span', { class: 'dot ' + (r.found ? 'ok' : 'off') }), h('b', { text: r.name }), h('small', { class: 't-dim', text: r.found ? (r.version || 'found') : 'not found' }), h('span', { class: 'spacer' }),
+      r.override ? h('span', { class: 'chip', text: 'custom' }) : null),
+    h('div', { class: 'kv', text: r.path || (r.folder ? 'Choose the Tomcat folder (contains bin/catalina)' : 'Not on PATH') }),
+    h('div', { class: 'row' },
+      h('button', { text: 'Browse…', onclick: async () => {
+        const d = await inv('dialog:selectFolder', 'Select the ' + r.name + ' install folder').catch(() => null);
+        if (!d) return;
+        const res = await tryInv('runtime:set', r.id, d);
+        if (!res.ok) return status(res.error, true);
+        draw(res.data); detectBuildEnv();
+      } }),
+      r.override ? h('button', { text: 'Reset', onclick: async () => { const res = await tryInv('runtime:set', r.id, ''); if (res.ok) { draw(res.data); detectBuildEnv(); } } }) : null))));
+  tryInv('runtime:list').then((r) => (r.ok ? draw(r.data) : list.replaceChildren(h('div', { class: 'msg err', text: r.error }))));
+  return box;
 }
 
 function cloudsPane() {
@@ -50,6 +78,14 @@ function aiPane(rerender) {
     const msg = h('div', { class: 'msg' });
     const base = a.configurableBaseUrl ? h('input', { value: a.baseUrl, placeholder: 'Base URL' }) : null;
     const model = h('input', { value: a.model, placeholder: 'Model', list: `models-${a.id}` });
+    if (a.auth === 'signin') {
+      return h('div', { class: 'card' }, h('div', { class: 'cardh' }, h('span', { class: 'dot ' + (a.ready ? 'ok' : 'off') }), h('b', { text: a.name }), h('span', { class: 'chip', text: 'no API key' })),
+        h('div', { class: 'hint', text: a.help }),
+        h('div', { class: 'msg ' + (a.ready ? 'ok' : ''), text: a.statusText }),
+        h('label', { text: 'Model' }), h('input', { value: a.model, list: 'models-' + a.id, onchange: async (e) => { await tryInv('ai:setConfig', a.id, { model: e.target.value.trim() }); } }),
+        h('datalist', { id: 'models-' + a.id }, a.models.map((m) => h('option', { value: m }))),
+        h('div', { class: 'row' }, a.canLogin && !a.ready ? h('button', { class: 'primary', text: 'Sign in', onclick: () => aiSignIn(a.id) }) : null, h('button', { text: 'Re-check', onclick: async () => { await loadAi(); rerender(); } })));
+    }
     return h('div', { class: 'card' }, h('div', { class: 'cardh' }, h('span', { class: `dot ${a.keySet || !a.needsKey ? 'ok' : 'off'}` }), h('b', { text: a.name })),
       h('div', { class: 'hint', text: a.help }),
       h('datalist', { id: `models-${a.id}` }, a.models.map((m) => h('option', { value: m }))),

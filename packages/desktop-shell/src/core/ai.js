@@ -27,17 +27,26 @@ function register({ ipcMain, wrap, host, store, secrets, terminal }) {
   }
 
   ipcMain.handle('ai:list', wrap(async () => {
-    const api = [...host.ai.values()].map((p) => ({
+    const api = await Promise.all([...host.ai.values()].map(async (p) => {
+      let st = null;
+      if (typeof p.status === 'function') { try { st = await p.status(); } catch (e) { st = { signedIn: false, detail: e.message }; } }
+      const keySet = secrets.has(`ai.${p.id}.key`);
+      return {
       id: p.id,
       name: p.name,
       kind: 'api',
       models: p.models || [],
       model: store.get(`ai.${p.id}.model`, p.defaultModel || ''),
       needsKey: p.needsKey !== false,
-      keySet: secrets.has(`ai.${p.id}.key`),
+      keySet,
+      auth: p.auth || (p.needsKey === false ? 'none' : 'key'),
+      ready: st ? !!st.signedIn : (p.needsKey === false || keySet),
+      statusText: st ? (st.detail || '') : '',
+      canLogin: !!p.login,
       baseUrl: p.configurableBaseUrl ? store.get(`ai.${p.id}.baseUrl`, p.defaultBaseUrl || '') : '',
       configurableBaseUrl: !!p.configurableBaseUrl,
       help: p.help || '',
+      };
     }));
     const cli = await Promise.all([...host.cli.values()].map(async (a) => ({
       id: a.id, name: a.name, kind: 'cli', cmd: a.cmd, installHint: a.installHint || '', installed: await isInstalled(a.cmd),
@@ -77,7 +86,7 @@ function register({ ipcMain, wrap, host, store, secrets, terminal }) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 180000);
     try {
-      const text = await p.chat({ model, system: String(req.system || '').slice(0, 20000), messages, key, baseUrl, signal: ctl.signal });
+      const text = await p.chat({ model, system: String(req.system || '').slice(0, 20000), messages, key, baseUrl, signal: ctl.signal, cwd: host.getWorkspace() || undefined });
       return { text, model };
     } catch (e) {
       if (e.name === 'AbortError') throw new Error('The request timed out after 3 minutes.');
@@ -85,6 +94,15 @@ function register({ ipcMain, wrap, host, store, secrets, terminal }) {
     } finally {
       clearTimeout(timer);
     }
+  }));
+
+  /** Sign in with the provider's own flow (e.g. 'claude auth login'), in a console window. Nothing is typed for you. */
+  ipcMain.handle('ai:login', wrap(async (id) => {
+    const p = host.ai.get(id);
+    if (!p || !p.login) throw new Error('This provider has no sign-in flow.');
+    if (p.login.url) return { url: p.login.url };
+    terminal.openWindow(`${p.name} sign-in`, commandLine(p.login.cmd, p.login.args || []), host.getWorkspace() || undefined);
+    return { opened: true };
   }));
 
   ipcMain.handle('ai:launchCli', wrap(async (id, ws) => {

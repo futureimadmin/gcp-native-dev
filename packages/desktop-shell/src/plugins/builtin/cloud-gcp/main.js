@@ -48,6 +48,73 @@ exports.activate = (ctx) => {
     return new sdk.ServiceCatalog(source);
   }
 
+
+  /* ---------- in-IDE resource explorer (read-only: list, describe, logs) ---------- */
+  const ID_OK = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,200}$/;
+  const loc = (s) => String(s || '').split('/').pop();
+  const LISTERS = {
+    run: {
+      title: 'Cloud Run services', list: () => ['run', 'services', 'list'],
+      map: (x) => ({ id: x.metadata.name, name: x.metadata.name, region: (x.metadata.labels || {})['cloud.googleapis.com/location'] || '', url: (x.status || {}).url || '',
+        status: (((x.status || {}).conditions || []).find((c) => c.type === 'Ready') || {}).status === 'True' ? 'Ready' : 'Not ready', detail: (x.status || {}).url || '' }),
+      describe: (p, it) => ['run', 'services', 'describe', it.name, `--region=${it.region}`],
+      logs: (p, it) => ['run', 'services', 'logs', 'read', it.name, `--region=${it.region}`, '--limit=100'],
+    },
+    cloudfunctions: {
+      title: 'Cloud Functions', list: () => ['functions', 'list'],
+      map: (x) => ({ id: x.name, name: loc(x.name), region: String(x.name).split('/')[3] || '', status: x.state || x.status || '', detail: x.environment || '', url: (x.serviceConfig || {}).uri || x.url || '' }),
+      describe: (p, it) => ['functions', 'describe', it.name, `--region=${it.region}`],
+      logs: (p, it) => ['functions', 'logs', 'read', it.name, `--region=${it.region}`, '--limit=100'],
+    },
+    container: {
+      title: 'GKE clusters', list: () => ['container', 'clusters', 'list'],
+      map: (x) => ({ id: x.name, name: x.name, region: x.location, status: x.status, detail: `${x.currentNodeCount || 0} nodes · ${x.currentMasterVersion || ''}` }),
+      describe: (p, it) => ['container', 'clusters', 'describe', it.name, `--location=${it.region}`],
+    },
+    storage: {
+      title: 'Cloud Storage buckets', list: () => ['storage', 'buckets', 'list'],
+      map: (x) => ({ id: x.name, name: x.name, region: x.location || '', status: x.storage_class || x.storageClass || '', detail: x.location_type || '' }),
+      describe: (p, it) => ['storage', 'buckets', 'describe', `gs://${it.name}`],
+    },
+    sqladmin: {
+      title: 'Cloud SQL instances', list: () => ['sql', 'instances', 'list'],
+      map: (x) => ({ id: x.name, name: x.name, region: x.region, status: x.state, detail: x.databaseVersion }),
+      describe: (p, it) => ['sql', 'instances', 'describe', it.name],
+    },
+    bigquery: {
+      title: 'BigQuery datasets', list: () => ['alpha', 'bq', 'datasets', 'list'], raw: true,
+    },
+    secretmanager: {
+      title: 'Secrets (names only)', list: () => ['secrets', 'list'],
+      map: (x) => ({ id: loc(x.name), name: loc(x.name), region: '', status: '', detail: x.createTime || '' }),
+      describe: (p, it) => ['secrets', 'describe', it.name],
+    },
+    artifactregistry: {
+      title: 'Artifact Registry repositories', list: () => ['artifacts', 'repositories', 'list'],
+      map: (x) => ({ id: loc(x.name), name: loc(x.name), region: String(x.name).split('/')[3] || '', status: x.format || '', detail: x.description || '' }),
+      describe: (p, it) => ['artifacts', 'repositories', 'describe', it.name, `--location=${it.region}`],
+    },
+    cloudbuild: {
+      title: 'Recent Cloud Build runs', list: () => ['builds', 'list', '--limit=25'],
+      map: (x) => ({ id: x.id, name: String(x.id).slice(0, 8), region: '', status: x.status, detail: `${x.createTime || ''} ${(x.substitutions || {})._SERVICE || ''}`.trim() }),
+      describe: (p, it) => ['builds', 'describe', it.id],
+      logs: (p, it) => ['builds', 'log', it.id],
+    },
+    pubsub: {
+      title: 'Pub/Sub topics', list: () => ['pubsub', 'topics', 'list'],
+      map: (x) => ({ id: loc(x.name), name: loc(x.name), region: '', status: '', detail: '' }),
+      describe: (p, it) => ['pubsub', 'topics', 'describe', it.name],
+    },
+  };
+
+  const PROJ_OK = (s) => PROJECT_RE.test(String(s));
+  const item_ok = (it) => it && ID_OK.test(String(it.id || '')) && ID_OK.test(String(it.name || '')) && (!it.region || /^[a-z0-9-]{2,40}$/.test(it.region));
+  const gc = async (scope, args, timeout = 60000) => {
+    const r = await exec('gcloud', [...args, `--project=${scope}`, '--quiet'], { timeout });
+    if (!r.ok) throw new Error((r.err || r.out || 'gcloud failed').split(/\r?\n/).filter(Boolean).slice(-3).join(' '));
+    return r.out;
+  };
+
   const withDockerfile = (ws) => fs.existsSync(path.join(ws, 'Dockerfile'));
 
   function cloudBuildYaml(docker) {
@@ -136,6 +203,27 @@ exports.activate = (ctx) => {
     async inventory(scope, opts) {
       const list = await (await catalogFor(opts)).listAccessibleServices(scope);
       return list.map((s) => ({ category: s.category, title: s.title, detail: s.name.replace('.googleapis.com', ''), url: s.consoleUrl(scope) }));
+    },
+
+
+    /** Read-only resource explorer so developers can work with services inside the IDE. */
+    async resources(scope, key) {
+      if (!PROJ_OK(scope)) throw new Error('Select a project first.');
+      const l = LISTERS[key];
+      if (!l || l.raw) return { supported: false, title: key };
+      const out = await gc(scope, [...l.list(), '--format=json']);
+      const items = (JSON.parse(out || '[]') || []).map(l.map).filter((i) => i && i.id);
+      return { supported: true, title: l.title, items, canLogs: !!l.logs };
+    },
+    async resourceInfo(scope, key, it) {
+      const l = LISTERS[key];
+      if (!PROJ_OK(scope) || !l || !l.describe || !item_ok(it)) throw new Error('Invalid request.');
+      return gc(scope, [...l.describe(scope, it), '--format=yaml']);
+    },
+    async resourceLogs(scope, key, it) {
+      const l = LISTERS[key];
+      if (!PROJ_OK(scope) || !l || !l.logs || !item_ok(it)) throw new Error('Logs are not available for this resource.');
+      return gc(scope, l.logs(scope, it), 90000);
     },
 
     actions: {

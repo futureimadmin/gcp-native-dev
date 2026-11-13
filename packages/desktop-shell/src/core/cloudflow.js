@@ -14,7 +14,7 @@ const ENVS = ['dev', 'sit', 'uat', 'prod'];
 const NAME_RE = /^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$/;
 const GROUP_RE = /^[A-Za-z0-9._()-]{1,90}$/;
 const SA_RE = /^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$/;
-const CALLABLE = new Set(['status', 'login', 'logout', 'scopes', 'setScope', 'inventory', 'consoleUrl']);
+const CALLABLE = new Set(['status', 'login', 'logout', 'scopes', 'setScope', 'inventory', 'consoleUrl', 'resources', 'resourceInfo', 'resourceLogs']);
 
 const DEFAULTS = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '' };
 

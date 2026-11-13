@@ -39,12 +39,21 @@ Code signing is disabled (`signAndEditExecutable: false`) because electron-build
 | **Least-privilege inventory** | Lists only what the identity can use (GCP `testIamPermissions`; AWS/K8s hide access-denied resources) |
 | **Cloud Native mode** | Right-click a project → Enable. Run CI/CD, Deploy, Create resource, Generate pipeline, Terraform bootstrap, dev/sit/uat/prod environments |
 | **Safety** | Every cloud-changing command is shown in full and needs a click; prod also needs typing `prod`. The UI can only run commands the main process prepared (one-time token) |
-| **AI** | Chat with Claude, Gemini, Grok or any OpenAI-compatible/local model (Ollama keeps code on your machine). Launch Claude Code, Gemini CLI or Codex CLI in a terminal window. Keys are stored encrypted with the Windows keystore |
+| **AI** | Claude Code and Gemini work with your existing logins (Claude login; Google Cloud ADC via Vertex AI): no API key. Grok, OpenAI-compatible/local models (Ollama keeps code on your machine) and key-based Claude/Gemini are optional. Launch Claude Code, Gemini CLI or Codex CLI in a terminal window. Keys are stored encrypted with the Windows keystore |
 | **Modernize & Migrate** | Scans the project, maps it to services on GCP / AWS / Azure / Kubernetes, 6R strategy per component, phased plan saved to `docs/migration/`, "Ask AI to refine" |
+| **Languages and frameworks** | Detects Maven, Gradle, npm (React, Angular, Vue, Node), Python, Go and .NET. Templates: Java, Spring Boot, Quarkus, Tomcat WAR, React, Vue, Angular, Go, .NET, Node, Python, Lambda, Azure Functions |
+| **Build, run, debug** | Toolbar Build / Run / Debug / Stop; auto-save; background compile on save; Debug starts the app with its debug agent (JDWP 5005, Node 9229, debugpy 5678, Delve 2345) |
+| **Runtimes and servers** | Settings > Runtimes (Node, JDK, Maven, Gradle, Python, Go, .NET, Git, Docker, Tomcat); Tomcat start/debug/stop/deploy WAR; every local listening port, opened in an in-IDE browser |
+| **Layout** | Draggable splitters, collapsible sidebar, maximize/minimize bottom panel, focus mode (double-click a tab) |
+| **Service explorer** | Clicking a cloud service opens it as a workspace tab: resources, config, logs (GCP: Run, Functions, GKE, Storage, SQL, Secrets, Artifact Registry, Build, Pub/Sub) |
+| **Help** | F1: local, offline help topics (no network) |
 | **Plugins** | Add clouds, AI providers, templates and analyzers. Third-party plugins are disabled until you enable them |
 
 ## Notes and limits
 
+- Debug launches the app with its debug agent and shows the port; a step debugger with breakpoints inside the IDE is not built yet.
+- Resource explorers cover Google Cloud services; AWS/Azure/Kubernetes services show a note and a browser link.
+- Cloud consoles are not embedded (Google/Microsoft sign-in refuses embedded browsers); the IDE browser opens https pages and localhost only.
 - The built-in terminal is a command runner, not a full PTY. Interactive AI agents open in a real console window.
 - AI chat is request/response (no streaming yet). Model names are editable because vendors rename them; the defaults are starting points.
 - AWS deploy needs a SAM `template.yaml`; the AWS/Azure pipeline "run" actions start an existing CodeBuild project / Azure Pipeline named `<service>-<env>`.

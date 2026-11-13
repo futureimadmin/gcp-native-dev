@@ -47,7 +47,7 @@ body.cn-mode #toolbar { border-bottom: 2px solid var(--cloud); }
 #activity button.active { opacity: 1; border-left-color: var(--accent); }
 #activity .spacer { flex: 1; }
 
-#sidebar { width: 320px; min-width: 240px; background: var(--bg2); border-right: 1px solid var(--line); overflow: auto; }
+#sidebar { width: var(--side-w, 320px); min-width: 200px; max-width: 70vw; flex: none; background: var(--bg2); overflow: auto; }
 .view header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 11px; letter-spacing: .06em; color: var(--dim); }
 .view header .actions button { padding: 0 6px; margin-left: 4px; background: transparent; border: none; color: var(--dim); }
 .pad { padding: 0 12px 12px; }
@@ -107,7 +107,7 @@ body.cn-mode #toolbar { border-bottom: 2px solid var(--cloud); }
 .recent:last-child { border-bottom: none; } .recent:hover { background: var(--bg2); } .recent small { color: var(--dim); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .recent .x { opacity: .4; } .recent .x:hover { opacity: 1; color: var(--danger); }
 
 /* bottom panel */
-#panel { height: 240px; border-top: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; }
+#panel { height: var(--panel-h, 240px); min-height: 80px; border-top: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; }
 #panel.collapsed { display: none; }
 #panel-bar { display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--bg2); }
 #panel-bar button { background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--dim); font-size: 11px; letter-spacing: .05em; }
@@ -128,7 +128,7 @@ body[data-env="prod"] #statusbar { background: #b5483d; }
 #st-cn { font-weight: 700; letter-spacing: .03em; }
 
 /* AI panel */
-#aipanel { width: 400px; min-width: 320px; background: var(--bg2); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+#aipanel { flex: none; width: var(--ai-w, 400px); min-width: 280px; max-width: 70vw; background: var(--bg2); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
 .aihead { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .aibar { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px 0; } .aibar select, .aibar input { margin: 0; }
 .aicli { display: flex; gap: 4px; padding: 6px 12px; flex-wrap: wrap; } .aicli button { padding: 2px 8px; }
@@ -182,3 +182,39 @@ pre.progress { margin-top: 8px; max-height: 120px; }
 #titlebar-mode, #workspace-name { white-space: nowrap; }
 #workspace-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 #toolbar { flex-wrap: nowrap; overflow: hidden; }
+
+/* resizable layout */
+.splitter { flex: none; background: var(--line); transition: background .1s; z-index: 5; }
+.splitter:hover, .splitter.drag { background: var(--accent); }
+.splitter.v { width: 4px; cursor: col-resize; } .splitter.h { height: 4px; cursor: row-resize; }
+.splitter:has(+ #aipanel.hidden), .splitter:has(+ #panel.collapsed), body.side-hidden #rs-side, body.focus-mode .splitter { display: none; }
+body.side-hidden #sidebar, body.focus-mode #sidebar, body.focus-mode #activity, body.focus-mode #aipanel, body.focus-mode #panel, body.focus-mode #statusbar, body.focus-mode #toolbar { display: none; }
+body.dragging { user-select: none; cursor: inherit; } body.dragging webview { pointer-events: none; }
+#panel.max { flex: 1; height: auto; }
+#center.panel-max #tabs, #center.panel-max #editor-wrap, #center.panel-max #rs-panel { display: none; }
+#panel-bar button#btn-panel-max, #panel-bar button#btn-term-close { font-size: 13px; padding: 2px 8px; }
+
+/* run group */
+#run-group { display: flex; align-items: center; gap: 2px; }
+#run-group select { width: 190px; margin: 0; padding: 3px 6px; }
+#toolbar #run-group button { padding: 4px 8px; }
+#toolbar #tb-run:not(:disabled) { color: var(--ok); } #toolbar #tb-stop:not(:disabled) { color: var(--danger); }
+#st-run { font-weight: 600; }
+
+/* pages (browser, explorer, help) */
+#pages { position: absolute; inset: 0; background: var(--bg); }
+.page { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: auto; }
+.page.pad { padding: 20px 28px 50px; }
+.browser-bar { display: flex; gap: 6px; padding: 6px 8px; background: var(--bg2); border-bottom: 1px solid var(--line); align-items: center; }
+.browser-bar input { margin: 0; flex: 1; } .browser-bar button { padding: 3px 9px; }
+webview { flex: 1; border: none; background: #fff; }
+.table { width: 100%; border-collapse: collapse; margin-top: 8px; } .table th { text-align: left; color: var(--dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.table td { padding: 7px 8px; border-bottom: 1px solid var(--line); } .table tr.row-hover:hover { background: var(--bg2); cursor: pointer; } .table tr.sel { background: #25302a; }
+.split { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1.2fr); gap: 16px; align-items: start; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; border: 1px solid var(--line); color: var(--dim); } .badge.ok { color: var(--ok); border-color: var(--ok); } .badge.bad { color: var(--danger); border-color: var(--danger); }
+.helpwrap { display: grid; grid-template-columns: 220px 1fr; height: 100%; } .helpnav { border-right: 1px solid var(--line); background: var(--bg2); overflow: auto; padding: 10px 0; }
+.helpnav button { display: block; width: 100%; text-align: left; border: none; border-left: 2px solid transparent; border-radius: 0; background: transparent; padding: 7px 16px; } .helpnav button.active { border-left-color: var(--accent); background: #25302a; }
+.helpbody { overflow: auto; padding: 22px 34px 60px; line-height: 1.6; } .helpbody > div { max-width: 860px; } .helpbody h1 { color: var(--accent); font-weight: 600; margin-top: 0; } .helpbody h2 { color: var(--accent2); font-weight: 600; margin-top: 26px; font-size: 15px; }
+.helpbody code, .helpbody kbd { background: var(--bg2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-family: var(--mono); font-size: 12px; } .helpbody li { margin: 3px 0; }
+.sideborder { border-right: 1px solid var(--line); }
+.helpwrap { flex: 1; min-height: 0; } .helpwrap > * { min-height: 0; }

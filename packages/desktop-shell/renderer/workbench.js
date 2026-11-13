@@ -48,9 +48,10 @@ function setEditorFontSize(n) {
 function renderTabs() {
   $('tabs').replaceChildren(...state.tabs.map((t) => {
     const home = t.kind === 'home';
-    const dirty = !home && t.model.getValue() !== t.saved;
-    return h('div', { class: 'tab' + (t === state.active ? ' active' : ''), title: home ? 'Workspace' : t.path, onclick: () => activate(t) },
-      h('span', { text: home ? '⌂ Workspace' : baseName(t.path) }),
+    const page = t.kind === 'page';
+    const dirty = t.kind === 'file' && t.model.getValue() !== t.saved;
+    return h('div', { class: 'tab' + (t === state.active ? ' active' : ''), title: home ? 'Workspace' : page ? t.title : t.path, onclick: () => activate(t), ondblclick: () => CNS.run('layout.focus') },
+      h('span', { text: home ? '⌂ Workspace' : page ? `${t.icon || '▣'} ${t.title}` : baseName(t.path) }),
       h('span', { class: 'dot', text: dirty ? '●' : '' }),
       h('span', { class: 'x', text: '✕', onclick: (e) => { e.stopPropagation(); closeTab(t); } }));
   }));
@@ -60,9 +61,12 @@ function activate(tab) {
   if (state.active && state.active.kind === 'file' && editor) state.active.viewState = editor.saveViewState();
   state.active = tab;
   const home = !tab || tab.kind === 'home';
+  const page = !!tab && tab.kind === 'page';
   $('home').classList.toggle('hidden', !home);
-  $('editor').classList.toggle('hidden', home);
-  if (!home && editor) {
+  $('editor').classList.toggle('hidden', home || page);
+  document.querySelectorAll('#pages > .page').forEach((p) => p.classList.toggle('hidden', !(page && p === tab.el)));
+  $('pages').classList.toggle('hidden', !page);
+  if (!home && !page && editor) {
     editor.setModel(tab.model);
     if (tab.viewState) editor.restoreViewState(tab.viewState);
     editor.focus();
@@ -88,7 +92,7 @@ async function openFile(file) {
   try { text = await inv('fs:readFile', file); } catch (e) { return status(e.message, true); }
   const model = monaco.editor.createModel(text, langFor(file));
   const tab = { kind: 'file', path: file, model, saved: text, viewState: null };
-  model.onDidChangeContent(() => renderTabs());
+  model.onDidChangeContent(() => { renderTabs(); if (typeof onFileEdited === 'function') onFileEdited(tab); });
   state.tabs.push(tab);
   activate(tab);
 }
@@ -97,6 +101,7 @@ async function saveTab(t) {
   const text = t.model.getValue();
   await inv('fs:writeFile', t.path, text);
   t.saved = text;
+  if (typeof afterSave === 'function') afterSave(t);
 }
 
 async function saveActive() {
@@ -117,13 +122,14 @@ async function closeTab(tab) {
   const i = state.tabs.indexOf(tab);
   state.tabs.splice(i, 1);
   if (tab.kind === 'file') tab.model.dispose();
+  if (tab.kind === 'page') { tab.el.remove(); if (tab.onClose) tab.onClose(); }
   if (!state.tabs.length) return showHome();
   activate(state.active === tab ? state.tabs[Math.min(i, state.tabs.length - 1)] : state.active);
 }
 
 function closeAllFileTabs() {
   for (const t of state.tabs.filter((x) => x.kind === 'file')) t.model.dispose();
-  state.tabs = state.tabs.filter((t) => t.kind === 'home');
+  state.tabs = state.tabs.filter((t) => t.kind === 'home' || t.kind === 'page');
 }
 
 function activeSelection() {
@@ -214,6 +220,8 @@ async function createEntry(isDir) {
 /* ------------------------------ terminal / bottom panel ------------------------------ */
 
 let runningId = null;
+const termWaiters = new Map(); // id -> fn(exitCode)
+const termRoutes = new Map(); // id -> fn(text, stream): send output to another panel
 const termHistory = [];
 let histIdx = 0;
 const promptStr = () => `${state.cwd ? baseName(state.cwd) : '~'}>`;
@@ -262,12 +270,15 @@ function showPanel(which) {
   if (which === 'terminal') $('term-input').focus();
 }
 
-const togglePanel = () => ($('panel').classList.contains('collapsed') ? showPanel('terminal') : $('panel').classList.add('collapsed'));
+const togglePanel = () => ($('panel').classList.contains('collapsed') ? showPanel('terminal') : minimizePanel());
 
 function wireWorkbench() {
-  cns.on('term:data', ({ stream, text }) => termPrint(text, stream === 'err' ? 't-err' : ''));
+  cns.on('term:data', ({ id, stream, text }) => { const r = termRoutes.get(id); if (r) r(text, stream); else termPrint(text, stream === 'err' ? 't-err' : ''); });
   cns.on('term:exit', ({ id, code }) => {
     if (id === runningId) runningId = null;
+    termRoutes.delete(id);
+    const waiter = termWaiters.get(id);
+    if (waiter) { termWaiters.delete(id); try { waiter(code); } catch (e) { console.error(e); } }
     const title = state.cloudRuns.get(id);
     if (title) {
       state.cloudRuns.delete(id);

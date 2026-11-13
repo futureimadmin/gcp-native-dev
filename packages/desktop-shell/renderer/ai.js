@@ -7,7 +7,7 @@ const MAX_ATTACH = 60000;
 async function loadAi() {
   try { state.ai = await inv('ai:list'); } catch (e) { state.ai = { api: [], cli: [], secureStorage: false }; status(e.message, true); }
   if (!chat.provider || !state.ai.api.some((a) => a.id === chat.provider)) {
-    const ready = state.ai.api.find((a) => a.keySet || !a.needsKey);
+    const ready = state.ai.api.find((a) => a.ready);
     chat.provider = (ready || state.ai.api[0] || {}).id || '';
   }
   renderAiPanel();
@@ -20,7 +20,7 @@ function toggleAi(force) {
   const show = force != null ? force : panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !show);
   $('tb-ai').classList.toggle('active', show);
-  if (show) { renderAiPanel(); $('ai-input').focus(); }
+  if (show) { renderAiPanel(); loadAi(); $('ai-input').focus(); } // refresh sign-in status each time the panel opens
 }
 
 function attach(label, text) {
@@ -70,14 +70,14 @@ function renderAiPanel() {
   const ai = state.ai;
   const sel = $('ai-provider');
   if (!ai) return;
-  sel.replaceChildren(...ai.api.map((a) => h('option', { value: a.id, text: `${a.name}${a.keySet || !a.needsKey ? '' : ' (no key)'}`, selected: a.id === chat.provider })));
+  sel.replaceChildren(...ai.api.map((a) => h('option', { value: a.id, text: `${a.name}${a.ready ? '' : a.auth === 'signin' ? ' (sign in)' : ' (no key)'}`, selected: a.id === chat.provider })));
   const p = curProvider();
   $('ai-model').value = p ? p.model : '';
   $('ai-models').replaceChildren(...(p ? p.models : []).map((m) => h('option', { value: m })));
   $('ai-cli').replaceChildren(...ai.cli.map((a) => h('button', { class: 'subtle', text: a.name, title: a.installed ? `Open ${a.name} in a terminal window` : a.installHint, disabled: !a.installed, onclick: () => launchCli(a.id) })));
 
   const log_ = $('ai-log');
-  log_.replaceChildren(...(chat.messages.length ? chat.messages.map(renderMessage) : [h('div', { class: 'empty', text: p && !(p.keySet || !p.needsKey) ? 'Add your API key in Settings > AI to start chatting.' : 'Ask about your code, a deployment, a migration…' })]));
+  log_.replaceChildren(...(chat.messages.length ? chat.messages.map(renderMessage) : [h('div', { class: 'empty', text: p && !(p.keySet || !p.needsKey) ? (p && p.auth === 'signin' ? (p.statusText || 'Sign in to use this provider.') : 'Add your API key in Settings > AI to start chatting.') : 'Ask about your code, a deployment, a migration…' })]));
   if (chat.busy) log_.append(h('div', { class: 'msg assistant' }, h('div', { class: 'who', text: p ? p.name : 'Assistant' }), h('div', { class: 'mtext', text: 'Thinking…' })));
   log_.scrollTop = log_.scrollHeight;
 
@@ -85,6 +85,8 @@ function renderAiPanel() {
   const size = contextSize();
   $('ai-hint').textContent = p ? (size ? `Will send ${(size / 1024).toFixed(1)} KB of attached context to ${p.name}.` : `Messages go to ${p.name}. Attach files only when needed.`) : '';
   $('ai-send').disabled = chat.busy || !p;
+  $('ai-signin').classList.toggle('hidden', !(p && p.canLogin && !p.ready));
+  if (p && p.auth === 'signin' && p.ready) $('ai-hint').textContent = p.statusText;
 }
 
 async function sendChat() {
@@ -92,6 +94,7 @@ async function sendChat() {
   const input = $('ai-input');
   const text = input.value.trim();
   if (!p || !text || chat.busy) return;
+  if (p.auth === 'signin' && !p.ready) { status(p.statusText || 'Sign in first.', true); return p.canLogin ? aiSignIn(p.id) : openSettings('ai'); }
   if (p.needsKey && !p.keySet) return openSettings('ai');
   const ctxText = chat.attachments.map((a) => `### ${a.label}\n\`\`\`\n${a.text}\n\`\`\``).join('\n\n');
   const content = ctxText ? `${text}\n\n---\nContext attached by the user:\n\n${ctxText}` : text;
@@ -110,6 +113,15 @@ async function sendChat() {
   renderAiPanel();
 }
 
+/** Opens the provider's own sign-in (a console window) and re-checks status when you return to the IDE. */
+async function aiSignIn(id) {
+  const r = await tryInv('ai:login', id);
+  if (!r.ok) return status(r.error, true);
+  status('Complete the sign-in in the window that opened, then come back; the IDE re-checks automatically.');
+  const recheck = async () => { window.removeEventListener('focus', recheck); await loadAi(); };
+  window.addEventListener('focus', recheck);
+}
+
 async function launchCli(id) {
   const r = await tryInv('ai:launchCli', id, state.workspace);
   if (!r.ok) return status(r.error, true);
@@ -120,6 +132,7 @@ function wireAi() {
   $('ai-provider').onchange = (e) => { chat.provider = e.target.value; chat.messages = []; renderAiPanel(); };
   $('ai-model').onchange = async (e) => { const p = curProvider(); if (!p) return; const r = await tryInv('ai:setConfig', p.id, { model: e.target.value.trim() }); if (!r.ok) status(r.error, true); else p.model = e.target.value.trim(); };
   $('ai-send').onclick = sendChat;
+  $('ai-signin').onclick = () => curProvider() && aiSignIn(curProvider().id);
   $('ai-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendChat(); } });
   $('ai-new').onclick = () => { chat.messages = []; chat.attachments = []; renderAiPanel(); };
   $('ai-close').onclick = () => toggleAi(false);

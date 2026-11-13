@@ -21,6 +21,14 @@
     <span id="workspace-name"></span>
     <span id="titlebar-mode"></span>
     <span class="spacer"></span>
+    <span id="run-group">
+      <select id="run-config" title="Run configuration"></select>
+      <button id="tb-build" title="Build (Ctrl+F9)">🔨</button>
+      <button id="tb-run" title="Run (F5)">▶</button>
+      <button id="tb-debug" title="Debug (Ctrl+F5)">🐞</button>
+      <button id="tb-stop" title="Stop (Shift+F5)" disabled>■</button>
+    </span>
+    <div class="tb-sep"></div>
     <button id="tb-pipeline" class="cn-only hidden" title="Run CI/CD pipeline">▶ CI/CD</button>
     <button id="tb-deploy" class="cn-only hidden" title="Deploy">⬆ Deploy</button>
     <span id="tb-plugins"></span>
@@ -50,25 +58,31 @@
         </div>
       </section>
 
+      <section id="view-run" class="view hidden"></section>
+
       <section id="view-clouds" class="view hidden">
         <header><span>CLOUDS</span><span class="actions"><button id="btn-cloud-refresh" title="Refresh all">&#8635;</button></span></header>
         <div id="cloud-list" class="pad"></div>
       </section>
     </aside>
+    <div class="splitter v" id="rs-side" title="Drag to resize"></div>
 
     <div id="center">
       <div id="tabs"></div>
       <div id="editor-wrap">
         <div id="editor" class="hidden"></div>
         <div id="home"></div>
+        <div id="pages" class="hidden"></div>
       </div>
+      <div class="splitter h" id="rs-panel" title="Drag to resize"></div>
       <div id="panel" class="collapsed">
         <div id="panel-bar">
           <button class="active" data-panel="terminal">TERMINAL</button>
           <button data-panel="output">OUTPUT</button>
           <span class="spacer"></span>
           <button id="btn-term-clear" title="Clear">Clear</button>
-          <button id="btn-term-close" title="Hide">&#10005;</button>
+          <button id="btn-panel-max" title="Maximize / restore panel (Ctrl+Shift+M)">&#9633;</button>
+          <button id="btn-term-close" title="Minimize panel">&#8212;</button>
         </div>
         <div id="panel-terminal" class="panel-body">
           <pre id="term-out"></pre>
@@ -78,11 +92,13 @@
       </div>
     </div>
 
+    <div class="splitter v" id="rs-ai" title="Drag to resize"></div>
     <aside id="aipanel" class="hidden">
       <div class="aihead">
         <b>✦ AI Assistant</b>
         <span class="spacer"></span>
         <button id="ai-new" class="subtle" title="New chat">New chat</button>
+        <button id="ai-signin" class="subtle hidden" title="Sign in to this provider">Sign in</button>
         <button id="ai-close" class="subtle" title="Close">✕</button>
       </div>
       <div class="aibar">
@@ -106,6 +122,7 @@
   <footer id="statusbar">
     <span id="st-cn" class="hidden" title="Click to switch environment"></span>
     <span id="st-cloud" title="Click to open Clouds">No cloud sign-in</span>
+    <span id="st-run" class="hidden"></span>
     <span class="spacer"></span>
     <span id="st-pos"></span>
     <span id="st-lang"></span>
@@ -135,6 +152,10 @@
 <script src="ai.js"></script>
 <script src="settings.js"></script>
 <script src="launch.js"></script>
+<script src="layout.js"></script>
+<script src="pages.js"></script>
+<script src="run.js"></script>
+<script src="help.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -20,6 +20,7 @@ async function openFolder(dir) {
   await loadProject();
   await refreshTree();
   tryInv('app:refreshMenu');
+  detectBuildEnv();
   showView('explorer');
   showHome();
   status(`Opened ${baseName(dir)}`);
@@ -36,6 +37,7 @@ async function closeFolder() {
   await tryInv('app:setWorkspace', null);
   applyMode();
   await refreshTree();
+  detectBuildEnv();
   showHome();
 }
 
@@ -57,7 +59,7 @@ async function newProjectDialog() {
 
   const draw = () => {
     list.replaceChildren(...templates.map((t) => h('div', { class: 'pick' + (t === chosen ? ' cur' : ''), onclick: () => { chosen = t; draw(); } },
-      h('b', { text: t.name }), h('small', { text: t.cloud === 'any' ? 'any cloud' : cloudName(t.cloud) || t.cloud }))));
+      h('b', { text: t.name }), h('small', { text: `${t.language || ''}${t.language ? ' · ' : ''}${t.cloud === 'any' ? 'any cloud' : cloudName(t.cloud) || t.cloud}` }))));
     desc.textContent = chosen.description;
   };
   draw();
@@ -80,6 +82,7 @@ async function newProjectDialog() {
         await tryInv('settings:set', 'workspace.lastParent', parent.value);
         state.settings.workspace = { ...(state.settings.workspace || {}), lastParent: parent.value };
         close();
+        if (r.scaffold) return scaffoldProject(r);
         await openFolder(r.dir);
         if (r.cloud !== 'any' && state.clouds.some((c) => c.id === r.cloud) && (await confirmBox(`Enable Cloud Native Development for ${cloudName(r.cloud)}?`, 'This connects the new project to that cloud. You can change it later.'))) {
           await saveProject({ cloud: r.cloud, enabled: true });
@@ -197,4 +200,19 @@ async function renderHome() {
     homeSection('AI assistants', h('div', { class: 'cards' }, aiCards), h('div', { class: 'row' }, h('button', { text: 'Configure AI', onclick: () => openSettings('ai') }), h('button', { text: 'Open assistant', onclick: () => CNS.run('ai.toggle') })))
   ];
   home.replaceChildren(...children.filter(Boolean));
+}
+
+/** Frameworks with their own generator (Angular, .NET): run the official CLI in the terminal, then open the result. */
+async function scaffoldProject(r) {
+  showPanel('terminal');
+  termPrint(`> ${r.scaffold}   [${r.parentDir}]
+`, 't-cmd');
+  status('Generating the project with its official CLI… this can take a minute.');
+  const t = await tryInv('term:run', r.scaffold, r.parentDir);
+  if (!t.ok) return status(t.error, true);
+  termWaiters.set(t.data, async (code) => {
+    if (code !== 0) return status('Project generation failed. See the terminal.', true);
+    status('Project generated.');
+    await openFolder(r.dir);
+  });
 }

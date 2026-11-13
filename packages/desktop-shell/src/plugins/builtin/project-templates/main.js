@@ -7,6 +7,8 @@ const json = (o) => `${JSON.stringify(o, null, 2)}\n`;
 const readme = (name, body) => `# ${name}\n\n${body}\n\nCreated with Cloud Native Studio. Right-click the project > **Enable Cloud Native Development** to connect it to a cloud.\n`;
 
 exports.activate = (ctx) => {
+  require('./more').register(ctx);
+
   ctx.templates.register({
     id: 'node-container', name: 'Node.js web service (container)', language: 'JavaScript', cloud: 'any',
     description: 'Express service with /healthz and a Dockerfile. Runs on Cloud Run, ECS/App Runner, Azure Container Apps or Kubernetes.',

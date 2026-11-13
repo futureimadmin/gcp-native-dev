@@ -20,7 +20,7 @@ const repoName = (url) => url.replace(/\.git$/, '').split(/[/:]/).filter(Boolean
 
 function register({ ipcMain, wrap, host, send, store }) {
   ipcMain.handle('project:templates', wrap(async () => host.templates.map((t) => ({
-    id: t.id, name: t.name, description: t.description || '', cloud: t.cloud || 'any', language: t.language || '',
+    id: t.id, name: t.name, description: t.description || '', cloud: t.cloud || 'any', language: t.language || '', scaffold: !!t.scaffold,
   }))));
 
   ipcMain.handle('project:create', wrap(async ({ parentDir, name, template, gitInit }) => {
@@ -30,6 +30,10 @@ function register({ ipcMain, wrap, host, send, store }) {
     if (!parentDir || !fs.existsSync(parentDir)) throw new Error('Choose an existing parent folder.');
     const dir = path.join(parentDir, name);
     if (fs.existsSync(dir) && fs.readdirSync(dir).length) throw new Error(`"${dir}" already exists and is not empty.`);
+    if (t.scaffold) {
+      // The framework's own CLI creates the project; the UI runs this exact command in the terminal panel.
+      return { dir, git: false, cloud: t.cloud || 'any', scaffold: String(t.scaffold(name)), parentDir };
+    }
     const files = t.files(name);
     const entries = Object.entries(files);
     if (!entries.length || entries.length > 200) throw new Error('Template produced an invalid file set.');

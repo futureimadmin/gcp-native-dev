@@ -41,7 +41,7 @@ disabled until you enable them in Settings > Plugins and confirm the warning. Re
 | API | Purpose |
 |-----|---------|
 | `ctx.cloud.register(provider)` | Add a public or private cloud (see below) |
-| `ctx.ai.register(provider)` | Add a chat provider: `{id, name, models, defaultModel, needsKey, configurableBaseUrl, chat({model, system, messages, key, baseUrl, signal}) -> string}` |
+| `ctx.ai.register(provider)` | Add a chat provider: `{id, name, models, defaultModel, needsKey, configurableBaseUrl, chat({model, system, messages, key, baseUrl, signal, cwd}) -> string}`. For providers that use an existing sign-in instead of a key set `needsKey: false, auth: "signin"` and add `status() -> {signedIn, detail}` and optionally `login: {cmd, args}` (run in a console window) |
 | `ctx.ai.registerCli(agent)` | Terminal agent launched in a console window: `{id, name, cmd, installHint}` |
 | `ctx.templates.register(t)` | New Project template: `{id, name, description, cloud, language, files(name) -> {path: content}}` |
 | `ctx.analyzers.register(a)` | Modernize analyzer: `{id, analyze(workspacePath, analysis)}` mutates the analysis (e.g. push findings) |
@@ -70,6 +70,9 @@ ctx.cloud.register({
   async scopes()    { return [{ id, name, detail }]; },
   async setScope(id) {},
   async inventory(scope, opts) { return [{ category, title, detail, url }]; },   // only what the identity can use
+  async resources(scope, key) { return { supported, title, items: [{id, name, region, status, detail, url}], canLogs }; },  // optional: in-IDE resource explorer (read-only)
+  async resourceInfo(scope, key, item) { return "yaml/text"; },                                                  // optional
+  async resourceLogs(scope, key, item) { return "log text"; },                                                    // optional
   actions: {                                                                     // all optional
     generatePipeline(proj, ws) { return { path, content }; },
     pipeline(proj, ws)  { return { title, command }; },

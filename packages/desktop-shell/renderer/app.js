@@ -5,6 +5,7 @@
 
 const CORE_VIEWS = [
   { id: 'explorer', title: 'Explorer', icon: '📁' },
+  { id: 'run', title: 'Run & Servers', icon: '▶' },
   { id: 'clouds', title: 'Clouds', icon: '☁' },
 ];
 
@@ -12,7 +13,7 @@ function buildActivityBar() {
   const bar = $('activity');
   const views = [...CORE_VIEWS, ...CNS.views];
   bar.replaceChildren(
-    ...views.map((v) => h('button', { 'data-view': v.id, title: v.title, text: v.icon || '•', onclick: () => showView(v.id) })),
+    ...views.map((v) => h('button', { 'data-view': v.id, title: v.title, text: v.icon || '•', onclick: () => clickView(v.id) })),
     h('span', { class: 'spacer' }),
     h('button', { title: 'Workspace home', text: '⌂', onclick: () => showHome() }),
     h('button', { title: 'Settings', text: '⚙', onclick: () => openSettings() })
@@ -28,8 +29,9 @@ function showView(id) {
   if (!known) return status(`View "${id}" is not available (is its plugin enabled?).`, true);
   document.querySelectorAll('#activity button[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === id));
   document.querySelectorAll('#sidebar .view').forEach((v) => v.classList.toggle('hidden', v.id !== `view-${id}`));
-  $('sidebar').classList.remove('hidden');
+  document.body.classList.remove('side-hidden');
   if (id === 'clouds') renderCloudView();
+  if (id === 'run') renderRunView($('view-run'));
   const pv = CNS.views.find((v) => v.id === id);
   if (pv) {
     const box = $(`view-${id}`);
@@ -89,7 +91,8 @@ function registerCommands() {
   C('cloud.bootstrap', bootstrapDialog, 'Cloud: Bootstrap Environments (Terraform)…');
   C('cloud.switchEnv', switchEnvDialog, 'Cloud: Switch Environment…');
   C('cloud.console', openConsole, 'Cloud: Open Console');
-  C('help.plugins', () => inv('shell:openExternal', 'https://github.com/futureimadmin/gcp-native-dev').catch((e) => status(e.message, true)), 'Help: Plugin guide (repository)');
+  C('help.open', (topic) => openHelp(topic), 'Help: Contents');
+  C('help.plugins', () => openHelp('plugins'), 'Help: Plugin development guide');
   C('help.about', () => openSettings('about'), 'Help: About');
   for (const c of state.clouds) C(`cloud.signin.${c.id}`, () => cloudLogin(c.id), `Cloud: Sign in to ${c.name}`);
   for (const a of ['claude-code', 'gemini-cli', 'codex-cli']) C(`ai.cli.${a}`, () => launchCli(a), `AI: Launch ${a} in a terminal window`);
@@ -150,10 +153,13 @@ async function main() {
     await loadClouds();
     registerCommands();
     wireWorkbench();
+    wireLayout();
+    wireRun();
     wireAi();
     wireToolbar();
     document.addEventListener('click', () => $('ctx').classList.add('hidden'));
     document.addEventListener('keydown', (e) => {
+      if (e.key === 'F1') { e.preventDefault(); openHelp(); }
       if (e.key === 'Escape') { $('ctx').classList.add('hidden'); $('palette').classList.add('hidden'); }
     });
     $('modal-root').addEventListener('mousedown', (e) => { if (e.target.id === 'modal-root') $('modal-root').classList.add('hidden'); });
