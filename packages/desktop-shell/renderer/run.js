@@ -172,7 +172,7 @@ async function doTest() {
 
 function onFileEdited(tab) {
   // Java: check for errors after you pause typing (this compiles your unsaved text too)
-  if (tab.kind === 'file' && /\.java$/i.test(tab.path) && typeof checkDelayMs === 'function' && checkDelayMs() > 0) scheduleJavaCheck(checkDelayMs());
+  if (tab.kind === 'file' && /\.java$/i.test(tab.path) && typeof checkDelayMs === 'function' && checkDelayMs() > 0) scheduleJavaCheck(checkDelayMs(), tab.path);
   if (autoSaveMode() !== 'afterDelay' || tab.kind !== 'file') return;
   clearTimeout(run.saveTimers.get(tab));
   run.saveTimers.set(tab, setTimeout(async () => {
@@ -184,7 +184,7 @@ function onFileEdited(tab) {
 /** Called after any successful save: kick off a debounced background compile for source files. */
 function afterSave(tab) {
   if (!state.workspace || (typeof dx !== 'undefined' && dx.saving)) return;
-  if (/\.java$/i.test(tab.path)) { scheduleJavaCheck(800); return; } // Java: check for errors right after a save or auto-save
+  if (/\.java$/i.test(tab.path)) { scheduleJavaCheck(800, tab.path); return; } // Java: check for errors right after a save or auto-save
   if (!autoBuildOn() || run.proc || !/\.(kt|ts|go|cs)$/i.test(tab.path)) return;
   const idx = run.projects.findIndex((p) => tab.path.toLowerCase().startsWith(p.dir.toLowerCase()) && taskOf(p, 'build') && taskOf(p, 'build').auto);
   if (idx < 0) return;

@@ -33,11 +33,14 @@ function generalPane() {
   check.onchange = () => { save('checkErrors', check.checked); if (!check.checked && typeof clearProblems === 'function') clearProblems(); };
   const delay = h('select', {}, [[5, 'After I stop typing for 5 seconds'], [10, 'After I stop typing for 10 seconds'], [0, 'Only when I save']].map(([v, t]) => h('option', { value: v, text: t, selected: v === (((state.settings.editor || {}).checkDelay) == null ? 5 : (state.settings.editor || {}).checkDelay) })));
   delay.onchange = () => save('checkDelay', Number(delay.value));
+  const sweep = h('input', { type: 'checkbox', checked: (state.settings.editor || {}).checkModule === true });
+  sweep.onchange = () => save('checkModule', sweep.checked);
   return h('div', {}, h('h3', { text: 'General' }),
     h('label', { text: 'Editor font size' }), size,
     h('label', { text: 'Auto-save' }), mode,
     h('label', { class: 'inline' }, check, ' Check Java for compile errors in the background (red mark in the margin, listed in PROBLEMS)'),
     h('label', { text: 'Check Java' }), delay,
+    h('label', { class: 'inline' }, sweep, ' Also check the whole module after each check, so problems in other files show up too (slower on big modules)'),
     h('label', { class: 'inline' }, build, ' Also auto-build Kotlin, TypeScript, Go and C# projects on save (off by default)'),
     h('label', { class: 'inline' }, prompt, ' Ask me to sign in to Google Cloud at startup when no Application Default Credentials are found'),
     h('p', { class: 'hint', text: 'Fonts follow the NetBeans defaults: Segoe UI for the interface, Monospaced for the editor.' }));

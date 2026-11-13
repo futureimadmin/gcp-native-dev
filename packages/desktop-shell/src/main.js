@@ -79,7 +79,7 @@ function boot() {
   ai.register({ ipcMain, wrap, host, store, secrets, terminal, send: sendToRenderer });
   runtime.register({ ipcMain, wrap, tools });
   codeintel.register({ ipcMain, wrap, getWorkspace: () => workspace });
-  javac.register({ ipcMain, wrap, tools, getWorkspace: () => workspace });
+  javac.register({ ipcMain, wrap, tools, getWorkspace: () => workspace, cacheRoot: path.join(app.getPath('userData'), 'cache') });
 }
 
 /* ------------------------------ window & menu ------------------------------ */
@@ -249,6 +249,8 @@ function buildMenu() {
         cmd('Command Palette…', 'palette.open', 'CmdOrCtrl+Shift+P'),
         sep,
         cmd('Toggle Sidebar', 'layout.sidebar', 'CmdOrCtrl+B'),
+        cmd('Reveal Active File in Explorer', 'file.revealExplorer', 'Alt+Shift+L'),
+        cmd('Keep Explorer in Sync with Open File', 'view.linkExplorer'),
         cmd('Maximize / Restore Bottom Panel', 'layout.panelMax', 'CmdOrCtrl+Shift+M'),
         cmd('Focus Editor (hide all panels)', 'layout.focus', 'CmdOrCtrl+K Z'),
         cmd('Servers', 'view.servers'),
@@ -264,6 +266,8 @@ function buildMenu() {
       submenu: [
         cmd('Build (Java uses the built-in javac)', 'run.build', 'CmdOrCtrl+F9'),
         cmd('Compile Java (built-in javac)', 'java.compile'),
+        cmd('Check This File Now', 'java.check'),
+        cmd('Show Detected Projects (modules)', 'java.modules'),
         cmd('Clear Compile Problems', 'java.clearProblems'),
         cmd('Run', 'run.run', 'F5'),
         cmd('Debug', 'run.debug', 'CmdOrCtrl+F5'),

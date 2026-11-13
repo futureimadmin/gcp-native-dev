@@ -48,6 +48,7 @@
           <span class="actions">
             <button id="btn-new-file" title="New File">+f</button>
             <button id="btn-new-folder" title="New Folder">+d</button>
+            <button id="btn-link" title="Keep the Explorer in sync with the open file">&#8644;</button>
             <button id="btn-refresh" title="Refresh">&#8635;</button>
           </span>
         </header>
@@ -70,6 +71,7 @@
 
     <div id="center">
       <div id="tabs"></div>
+      <div id="crumbs" class="hidden"></div>
       <div id="editor-wrap">
         <div id="editor" class="hidden"></div>
         <div id="home"></div>
@@ -166,6 +168,7 @@
 <script src="java.js"></script>
 <script src="commands.js"></script>
 <script src="compile.js"></script>
+<script src="explorerlink.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -48,6 +48,7 @@ Code signing is disabled (`signAndEditExecutable: false`) because electron-build
 | **Service explorer** | Clicking a cloud service opens it as a workspace tab: resources, config, logs (GCP: Run, Functions, GKE, Storage, SQL, Secrets, Artifact Registry, Build, Pub/Sub) |
 | **Help** | F1: local, offline help topics (no network) |
 | **Java and code editing** | Explorer shows Source Packages with dotted package names for Maven/Gradle/Ant layouts; accurate completion (project + JDK); Open Java Class, Go to Symbol, List Methods, Type Hierarchy, Implementations, Find Usages; Generate getters/setters/constructor/toString/equals; Organize Imports; New Java Class/Interface/Enum/Record/Test; Find/Replace (Ctrl+F/H) and Find/Replace in Files; 100+ editor commands in menus and the palette |
+| **Project model and error checking** | Reads build files into modules (monorepos work); checks the edited file in its own module after save / typing pause (incl. unsaved text) with the JDK javac; red margin dot + hover, PROBLEMS table; Explorer link (reveal, follow open tab, path bar) |
 | **Claude Code in the IDE** | Runs inside the AI panel with your Claude login: streaming, tool-use lines, session continuity, optional file edits. No console window |
 | **Plugins** | Add clouds, AI providers, templates and analyzers. Third-party plugins are disabled until you enable them |
 

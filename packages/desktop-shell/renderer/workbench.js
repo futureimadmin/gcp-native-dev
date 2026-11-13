@@ -58,7 +58,7 @@ function renderTabs() {
     const home = t.kind === 'home';
     const page = t.kind === 'page';
     const dirty = t.kind === 'file' && t.model.getValue() !== t.saved;
-    return h('div', { class: 'tab' + (t === state.active ? ' active' : ''), title: home ? 'Workspace' : page ? t.title : t.path, onclick: () => activate(t), ondblclick: () => CNS.run('layout.focus') },
+    return h('div', { class: 'tab' + (t === state.active ? ' active' : ''), title: home ? 'Workspace' : page ? t.title : t.path, onclick: () => activate(t), ondblclick: () => CNS.run('layout.focus'), oncontextmenu: (ev) => { ev.preventDefault(); ctxMenu(ev.clientX, ev.clientY, tabMenuItems(t)); } },
       h('span', { text: home ? '⌂ Workspace' : page ? `${t.icon || '▣'} ${t.title}` : baseName(t.path) }),
       h('span', { class: 'dot', text: dirty ? '●' : '' }),
       h('span', { class: 'x', text: '✕', onclick: (e) => { e.stopPropagation(); closeTab(t); } }));
@@ -86,6 +86,8 @@ function activate(tab) {
   }
   renderTabs();
   markTree();
+  if (typeof renderCrumbs === 'function') renderCrumbs(tab);
+  if (typeof linkExplorerTo === 'function') linkExplorerTo(tab);
 }
 
 function showHome() {
@@ -109,6 +111,7 @@ async function openFile(file) {
   state.tabs.push(tab);
   activate(tab);
   if (typeof applyMarkersFor === 'function') applyMarkersFor(tab);
+  if (typeof scheduleJavaCheck === 'function' && tab.path.toLowerCase().endsWith('.java')) scheduleJavaCheck(1200, tab.path); // check a Java file as soon as it is opened
 }
 
 async function saveTab(t) {
@@ -164,7 +167,8 @@ function insertAtCursor(text) {
 /* ------------------------------ explorer ------------------------------ */
 
 function markTree() {
-  document.querySelectorAll('.node').forEach((n) => n.classList.toggle('sel', !!state.active && state.active.kind === 'file' && n.dataset.path === state.active.path));
+  const want = state.active && state.active.kind === 'file' ? String(state.active.path).split('/').join(BS).toLowerCase() : null;
+  document.querySelectorAll('.node').forEach((n) => n.classList.toggle('sel', !!want && String(n.dataset.path).split('/').join(BS).toLowerCase() === want));
 }
 
 
@@ -209,11 +213,12 @@ async function buildDir(container, dir, opts = {}) {
     const caret = h('span', { class: 'caret', text: e.isDir ? '▸' : '' });
     const node = h('div', { class: 'node' + (bold ? ' group' : ''), 'data-path': e.path, title: e.path }, caret, icon ? h('span', { class: 'ico', text: icon }) : null, h('span', { text: label || e.name }));
     const kids = h('div', { class: 'children hidden' });
-    let loaded = false;
+    let loadP = null; // the load in progress or finished, so callers (like Reveal) can wait for it
     const toggle = async (open) => {
       kids.classList.toggle('hidden', !open);
       caret.textContent = open ? '▾' : '▸';
-      if (open && !loaded) { loaded = true; await buildDir(kids, e.path, { pkg }); }
+      if (open && !loadP) loadP = buildDir(kids, e.path, { pkg });
+      if (open) await loadP;
     };
     node.addEventListener('click', async () => {
       selected = e;
@@ -221,6 +226,7 @@ async function buildDir(container, dir, opts = {}) {
       else openFile(e.path);
     });
     node.addEventListener('contextmenu', (ev) => { ev.preventDefault(); ev.stopPropagation(); selected = e; ctxMenu(ev.clientX, ev.clientY, fileMenuItems(e)); });
+    node._toggle = toggle; // lets "reveal in Explorer" open folders programmatically
     container.append(node, kids);
     if (expand) toggle(true);
   };

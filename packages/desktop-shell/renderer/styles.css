@@ -243,3 +243,10 @@ webview { flex: 1; border: none; background: #fff; }
 .monaco-editor .cns-glyph-warn { background: radial-gradient(circle, #e0a100 0 4.5px, transparent 5px) center / 14px 14px no-repeat; cursor: pointer; }
 .prob { gap: 10px; } .prob .pico { width: 14px; flex: none; } .prob .pfile { width: 220px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .prob .pline { width: 50px; flex: none; color: var(--dim); text-align: right; } .prob.head { cursor: default; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); } .prob.head:hover { background: var(--bg); }
+
+/* path bar above the editor + explorer link */
+#crumbs { display: flex; align-items: center; gap: 4px; padding: 2px 10px; min-height: 24px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 12px; overflow: hidden; white-space: nowrap; }
+#crumbs .crumb { cursor: pointer; color: var(--dim); padding: 1px 3px; border-radius: 3px; } #crumbs .crumb:hover { background: var(--bg2); color: var(--fg); } #crumbs .crumb.cur { color: var(--fg); font-weight: 600; } #crumbs .crumb.root { color: var(--accent2); }
+#crumbs .sep { color: var(--line); } .crumb-btn { padding: 0 8px; font-size: 11px; }
+#btn-link.on { color: var(--accent2); }
+.node.sel { outline: 1px solid var(--accent); outline-offset: -1px; }

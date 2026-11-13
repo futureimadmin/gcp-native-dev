@@ -160,6 +160,7 @@ async function main() {
     wireLayout();
     wireRun();
     wireCompile();
+    wireExplorerLink();
     wireAi();
     wireToolbar();
     document.addEventListener('click', () => $('ctx').classList.add('hidden'));
