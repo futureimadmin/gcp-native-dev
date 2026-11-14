@@ -281,6 +281,7 @@ function setupEditorFeatures() {
   });
   editor.onDidChangeModel(updateLanguageOptions);
   registerJavaFeatures();
+  if (typeof setupAdvisor === 'function') setupAdvisor();
   // keys Monaco already binds to something else
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => CNS.run('nav.usages'));
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.F12, () => CNS.run('java.methods'));

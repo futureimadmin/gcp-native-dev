@@ -6,8 +6,8 @@ let aiRaf = false;
 const scheduleAiRender = () => { if (aiRaf) return; aiRaf = true; requestAnimationFrame(() => { aiRaf = false; renderAiPanel(); }); };
 const MAX_ATTACH = 60000;
 
-async function loadAi() {
-  try { state.ai = await inv('ai:list'); } catch (e) { state.ai = { api: [], cli: [], secureStorage: false }; status(e.message, true); }
+async function loadAi(fresh) {
+  try { state.ai = await inv('ai:list', !!fresh); } catch (e) { state.ai = { api: [], cli: [], secureStorage: false }; status(e.message, true); }
   if (!chat.provider || !state.ai.api.some((a) => a.id === chat.provider)) {
     const ready = state.ai.api.find((a) => a.ready);
     chat.provider = (ready || state.ai.api[0] || {}).id || '';
@@ -141,7 +141,7 @@ async function aiSignIn(id) {
   termStdin = t.data;
   termWaiters.set(t.data, async (code) => {
     termStdin = 0;
-    await loadAi();
+    await loadAi(true);
     status(code === 0 ? 'Sign-in finished.' : 'Sign-in did not complete. See the terminal.', code !== 0);
   });
 }

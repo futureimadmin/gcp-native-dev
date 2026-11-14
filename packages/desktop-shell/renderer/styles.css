@@ -250,3 +250,11 @@ webview { flex: 1; border: none; background: #fff; }
 #crumbs .sep { color: var(--line); } .crumb-btn { padding: 0 8px; font-size: 11px; }
 #btn-link.on { color: var(--accent2); }
 .node.sel { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+/* ---- context menu: fly-outs, shortcut hints, colour dots ---- */
+#ctx .item { display: flex; align-items: center; gap: 8px; position: relative; } #ctx .item > span:first-of-type { flex: 1; }
+#ctx .item .arrow { color: var(--dim); font-size: 10px; margin-left: 12px; } #ctx .item .hint-k { color: var(--dim); font-size: 11px; margin-left: 18px; }
+#ctx .cdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+#ctx .subm { display: none; position: absolute; left: 100%; top: -4px; min-width: 230px; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 0; box-shadow: 0 8px 30px rgba(0,0,0,.5); z-index: 71; }
+#ctx .subm.left { left: auto; right: 100%; } #ctx .item.has-sub:hover > .subm { display: block; }
+#ctx .item.has-sub:hover { background: #25302a; }

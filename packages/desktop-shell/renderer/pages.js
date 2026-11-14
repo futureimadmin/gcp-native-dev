@@ -82,7 +82,8 @@ async function buildExplorer(el, cloudId, cloud, scope, key, svc) {
         } }) : null,
         h('button', { text: 'Ask AI about this', onclick: () => askAI(`Explain the configuration of ${it.name} and suggest improvements (security, cost, reliability).`, [{ label: it.name, text: body.textContent }]) }),
         h('button', { class: 'subtle', text: 'Copy name', onclick: () => navigator.clipboard.writeText(it.name).then(() => status('Copied.')).catch(() => {}) })),
-      body, logs);
+      key === 'storage' && cloudId === 'gcp' ? buildStoragePane(cloudId, scope, it.name) : null,
+      key === 'storage' ? h('details', {}, h('summary', { text: 'Bucket configuration (YAML)' }), body) : body, logs);
     const r = await tryInv('cloud:call', cloudId, 'resourceInfo', [scope, key, it]);
     body.textContent = r.ok ? r.data : r.error;
     if (!r.ok) body.classList.add('t-err');
@@ -108,4 +109,64 @@ async function buildExplorer(el, cloudId, cloud, scope, key, svc) {
       h('table', { class: 'table' }, h('thead', {}, h('tr', {}, h('th', { text: 'Name' }), h('th', { text: 'Location' }), h('th', { text: 'Status' }))), h('tbody', {}, rows)));
   }
   load();
+}
+
+/* ------------------------------ Cloud Storage: browse a bucket (folders, files, text preview) ------------------------------ */
+
+function fmtBytes(n) {
+  if (!n) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
+}
+
+function buildStoragePane(cloudId, scope, bucket) {
+  const crumbs = h('div', { class: 'row' });
+  const list = h('div', { class: 'inv' });
+  const detail = h('div', {});
+  const box = h('div', { class: 'card' }, h('div', { class: 'cat', text: 'Contents' }), crumbs, list, detail);
+
+  const drawCrumbs = (prefix) => {
+    const parts = prefix.split('/').filter(Boolean);
+    const kids = [h('button', { class: 'subtle', text: `gs://${bucket}`, onclick: () => go('') })];
+    let acc = '';
+    for (const p of parts) { acc += `${p}/`; const target = acc; kids.push(h('span', { class: 't-dim', text: '/' }), h('button', { class: 'subtle', text: p, onclick: () => go(target) })); }
+    crumbs.replaceChildren(...kids);
+  };
+
+  const showFile = (f) => {
+    const url = `gs://${bucket}/${f.object}`;
+    const out = h('pre', { class: 'plan hidden', text: '' });
+    detail.replaceChildren(h('div', { class: 'cat bar', text: f.name }),
+      h('div', { class: 'kv' }, h('b', { text: fmtBytes(f.size) }), `  ·  ${f.contentType || 'unknown type'}${f.updated ? `  ·  updated ${f.updated.replace('T', ' ').replace(/\.\d+Z?$/, '').replace(/Z$/, '')}` : ''}${f.storageClass ? `  ·  ${f.storageClass}` : ''}`),
+      h('div', { class: 'row' },
+        h('button', { class: 'primary', text: 'Preview text (first 64 KB)', onclick: async () => {
+          out.classList.remove('hidden'); out.textContent = 'Loading…';
+          const r = await tryInv('cloud:call', cloudId, 'objectPreview', [scope, bucket, f.object, f.contentType, f.size]);
+          out.textContent = r.ok ? (r.data || '(empty file)') : r.error;
+          out.classList.toggle('t-err', !r.ok);
+        } }),
+        h('button', { text: 'Copy gs:// URL', onclick: () => navigator.clipboard.writeText(url).then(() => status('Copied.')).catch(() => {}) }),
+        h('button', { class: 'subtle', text: 'Ask AI', onclick: () => askAI(`What is ${f.name} and how is it used?`, out.textContent && !out.classList.contains('t-err') ? [{ label: f.name, text: out.textContent }] : []) })),
+      out);
+  };
+
+  async function go(prefix) {
+    drawCrumbs(prefix);
+    detail.replaceChildren();
+    list.replaceChildren(h('div', { class: 'empty', text: 'Loading…' }));
+    const r = await tryInv('cloud:call', cloudId, 'objects', [scope, bucket, prefix]);
+    if (!r.ok) return list.replaceChildren(h('div', { class: 'empty t-err', text: r.error }));
+    const d = r.data;
+    if (!d.folders.length && !d.files.length) return list.replaceChildren(h('div', { class: 'empty', text: prefix ? 'This folder is empty.' : 'This bucket has no files.' }));
+    list.replaceChildren(
+      ...(prefix ? [h('div', { class: 'svc', onclick: () => go(prefix.replace(/[^/]+\/$/, '')) }, h('span', { text: '⬑ ..' }), h('small', { text: 'up' }))] : []),
+      ...d.folders.map((f) => h('div', { class: 'svc', onclick: () => go(f.prefix) }, h('span', { text: `📁 ${f.name}/` }), h('small', { text: 'folder' }))),
+      ...d.files.map((f) => h('div', { class: 'svc', title: f.contentType, onclick: () => showFile(f) }, h('span', { text: `📄 ${f.name}` }), h('small', { text: `${fmtBytes(f.size)}${f.updated ? `  ·  ${f.updated.slice(0, 10)}` : ''}` }))),
+      ...(d.truncated ? [h('div', { class: 'hint', text: 'Showing the first 1500 entries.' })] : []));
+  }
+  go('');
+  return box;
 }

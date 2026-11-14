@@ -6,6 +6,7 @@
   content="default-src 'none'; script-src 'self' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src blob: data:; connect-src 'none'" />
 <title>Nativity Studio</title>
 <link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="advisor.css" />
 </head>
 <body>
 <div id="app">
@@ -83,6 +84,7 @@
           <button class="active" data-panel="terminal">TERMINAL</button>
           <button data-panel="output">OUTPUT</button>
           <button data-panel="problems">PROBLEMS</button>
+          <button data-panel="suggestions">SUGGESTIONS</button>
           <span class="spacer"></span>
           <button id="btn-term-clear" title="Clear">Clear</button>
           <button id="btn-panel-max" title="Maximize / restore panel (Ctrl+Shift+M)">&#9633;</button>
@@ -94,6 +96,7 @@
         </div>
         <div id="panel-output" class="panel-body hidden"><pre id="output-out"></pre></div>
         <div id="panel-problems" class="panel-body hidden"><div id="problems-list"></div></div>
+        <div id="panel-suggestions" class="panel-body hidden"><div id="suggestions-list"></div></div>
       </div>
     </div>
 
@@ -130,6 +133,7 @@
     <span id="st-cloud" title="Click to open Clouds">No cloud sign-in</span>
     <span id="st-run" class="hidden"></span>
     <span id="st-problems" class="hidden" title="Compile problems (click to open)"></span>
+    <span id="st-advice" class="hidden" title="Code advisor: SOLID warnings (orange) and modern alternatives (click to open the list)"></span>
     <span class="spacer"></span>
     <span id="st-pos"></span>
     <span id="st-lang"></span>
@@ -169,6 +173,11 @@
 <script src="commands.js"></script>
 <script src="compile.js"></script>
 <script src="explorerlink.js"></script>
+<script src="projtype.js"></script>
+<script src="advisor-java.js"></script>
+<script src="advisor-web.js"></script>
+<script src="advisor.js"></script>
+<script src="menus.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -93,11 +93,29 @@ const confirmBox = (message, detail) => inv('dialog:confirm', message, detail).c
 
 /* ------------------------------ context menu ------------------------------ */
 
+/** Pop-up menu. Items: '-' (separator), {label, run, disabled, hint, dot}, or {label, sub: [items]} for a fly-out sub-menu. */
 function ctxMenu(x, y, items) {
   const root = $('ctx');
   const hide = () => root.classList.add('hidden');
-  root.replaceChildren(...items.map((it) =>
-    it === '-' ? h('div', { class: 'sep' }) : h('div', { class: 'item' + (it.disabled ? ' dis' : ''), text: it.label, onclick: () => { hide(); if (!it.disabled) it.run(); } })));
+  const build = (list) => list.filter((it, i, a) => !(it === '-' && (i === 0 || i === a.length - 1 || a[i - 1] === '-'))).map((it) => {
+    if (it === '-') return h('div', { class: 'sep' });
+    if (it.sub) {
+      const sub = h('div', { class: 'subm' }, ...build(it.sub));
+      const row = h('div', { class: 'item has-sub' + (it.disabled ? ' dis' : '') }, it.dot ? h('i', { class: 'cdot', style: `background:${it.dot}` }) : null, h('span', { text: it.label }), h('span', { class: 'arrow', text: '▸' }), sub);
+      row.addEventListener('mouseenter', () => { // keep the fly-out on screen
+        sub.classList.remove('left');
+        const r = row.getBoundingClientRect();
+        const w = sub.offsetWidth;
+        const hh = sub.offsetHeight;
+        if (r.right + w > window.innerWidth - 4) sub.classList.add('left');
+        sub.style.top = `${Math.min(-4, window.innerHeight - 8 - (r.top + hh))}px`;
+      });
+      return row;
+    }
+    return h('div', { class: 'item' + (it.disabled ? ' dis' : ''), onclick: (e) => { e.stopPropagation(); hide(); if (!it.disabled) it.run(); } },
+      it.dot ? h('i', { class: 'cdot', style: `background:${it.dot}` }) : null, h('span', { text: it.label }), it.hint ? h('span', { class: 'hint-k', text: it.hint }) : null);
+  });
+  root.replaceChildren(...build(items));
   root.classList.remove('hidden');
   const w = root.offsetWidth;
   const hh = root.offsetHeight;

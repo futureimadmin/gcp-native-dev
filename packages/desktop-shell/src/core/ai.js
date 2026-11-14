@@ -28,10 +28,16 @@ function register({ ipcMain, wrap, host, store, secrets, terminal, send }) {
     return r.ok;
   }
 
-  ipcMain.handle('ai:list', wrap(async () => {
+  // Sign-in checks can take seconds (they start Claude Code / gcloud), so remember the answer for a minute; "Re-check" asks for a fresh one.
+  const statusCache = new Map();
+  ipcMain.handle('ai:list', wrap(async (fresh) => {
     const api = await Promise.all([...host.ai.values()].map(async (p) => {
       let st = null;
-      if (typeof p.status === 'function') { try { st = await p.status(); } catch (e) { st = { signedIn: false, detail: e.message }; } }
+      const hit = statusCache.get(p.id);
+      if (typeof p.status === 'function') {
+        if (hit && !fresh && Date.now() - hit.at < 60000) st = hit.st;
+        else { try { st = await p.status(); } catch (e) { st = { signedIn: false, detail: e.message }; } statusCache.set(p.id, { st, at: Date.now() }); }
+      }
       const keySet = secrets.has(`ai.${p.id}.key`);
       return {
       id: p.id,

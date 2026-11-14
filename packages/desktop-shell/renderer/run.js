@@ -29,6 +29,7 @@ async function detectBuildEnv() {
   renderRunConfig();
   if (!$('view-run').classList.contains('hidden')) renderRunView($('view-run'));
   if (currentProject() && currentProject().java && typeof scheduleJavaCheck === 'function') scheduleJavaCheck(2500); // first check when a Java project opens
+  CNS.emit('workspace-opened');
 }
 
 function renderRunConfig() {

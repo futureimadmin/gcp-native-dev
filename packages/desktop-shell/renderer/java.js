@@ -756,6 +756,8 @@ function sourceRootFor(dir) {
 async function defaultJavaDir() {
   const base = selected ? (selected.isDir ? selected.path : dirName(selected.path)) : (state.active && state.active.kind === 'file' ? dirName(state.active.path) : null);
   if (base && sourceRootFor(base)) return base;
+  const inBase = base ? joinPath(base, ['src', 'main', 'java'].join(BS)) : '';
+  if (inBase && await inv('fs:exists', inBase).catch(() => false)) return inBase; // right-clicked a module folder
   const guess = joinPath(state.workspace, ['src', 'main', 'java'].join(BS));
   if (await inv('fs:exists', guess).catch(() => false)) return guess;
   return base || state.workspace;

@@ -65,6 +65,18 @@
   const simple = (t) => stripGenerics(t).replace(/\[\]/g, '').split('.').pop().trim();
   const MODS = /^(?:(?:public|protected|private|static|final|abstract|synchronized|native|default|strictfp|transient|volatile|sealed|non-sealed)\s+)*/;
 
+  /** Names of the annotations written just before a declaration (between the previous ; { } and the declaration). */
+  function annotationsBefore(clean, at) {
+    let k = at - 1;
+    while (k >= 0 && !';{}'.includes(clean[k])) k--;
+    const seg = clean.slice(k + 1, at);
+    const out = [];
+    const re = /@([A-Za-z_][\w.]*)/g;
+    let m;
+    while ((m = re.exec(seg))) out.push(m[1].split('.').pop());
+    return out;
+  }
+
   function parse(src) {
     const clean = blank(src);
     const lineStarts = [0];
@@ -109,6 +121,7 @@
         name: x[4], kind, mods: x[2].trim().split(/\s+/).filter(Boolean), line: lineOf(nameStart), bodyStart: i, bodyEnd: matchBrace(clean, i),
         extends: ext ? splitTop(ext[1], ',').map(simple) : [], implements: imp ? splitTop(imp[1], ',').map(simple) : [],
         methods: [], fields: [], outer: '', typeParams,
+        annots: annotationsBefore(clean, x.index + x[1].length), // @Data, @Entity ... written above the declaration
       };
       if (kind === 'interface' && t.extends.length) { t.implements = t.extends; t.extends = []; }
       t.endLine = lineOf(t.bodyEnd);
@@ -155,6 +168,7 @@
       }
 
       for (const s of stmts) {
+        const annots = (s.text.match(/@[A-Za-z_][\w.]*/g) || []).map((a) => a.slice(1).split('.').pop());
         let text = s.text.replace(/@\w+(?:\.\w+)*(\s*\([^)]*\))?/g, ' ').replace(/\s+/g, ' ').trim();
         if (!text || text === ';' || text === '}' || /^(static\s*)?\{/.test(text)) continue;
         const line = lineOf(base + s.off + (s.text.length - s.text.trimStart().length));
@@ -169,7 +183,7 @@
           const isCtor = !ret && mm[3] === t.name;
           if (!ret && !isCtor) continue; // a call or something else
           if (ret === 'new' || ret === 'return' || ret === 'throw') continue;
-          t.methods.push({ name: mm[3], params: mm[4].replace(/\s+/g, ' ').trim(), ret: isCtor ? '' : stripGenerics(ret), mods: t.kind === 'interface' && !modList.includes('private') && !modList.includes('static') && !modList.includes('default') ? [...modList, 'abstract'] : modList, line, ctor: isCtor, typeParams: (mm[1] || '').trim() });
+          t.methods.push({ name: mm[3], params: mm[4].replace(/\s+/g, ' ').trim(), ret: isCtor ? '' : stripGenerics(ret), mods: t.kind === 'interface' && !modList.includes('private') && !modList.includes('static') && !modList.includes('default') ? [...modList, 'abstract'] : modList, line, ctor: isCtor, typeParams: (mm[1] || '').trim(), annots });
           continue;
         }
         const decl = rest.replace(/;\s*$/, '');
@@ -179,7 +193,7 @@
         const head = /^([\w.$<>\[\]?,\s]+?)\s+([A-Za-z_]\w*)(\s*\[\s*\])*\s*$/.exec(parts[0]);
         if (!head) continue;
         const type = stripGenerics(head[1]).trim() + (head[3] ? '[]' : '');
-        t.fields.push({ name: head[2], type, fullType: head[1].replace(/s+/g, ' ').trim() + (head[3] ? '[]' : ''), mods: t.kind === 'interface' ? [...modList, 'static', 'final'] : modList, line });
+        t.fields.push({ name: head[2], type, fullType: head[1].replace(/s+/g, ' ').trim() + (head[3] ? '[]' : ''), mods: t.kind === 'interface' ? [...modList, 'static', 'final'] : modList, line, annots });
         for (const extra of parts.slice(1)) { const en = /^([A-Za-z_]\w*)/.exec(extra); if (en) t.fields.push({ name: en[1], type, mods: modList, line }); }
       }
     }

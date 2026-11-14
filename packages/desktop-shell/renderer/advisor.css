@@ -1,0 +1,24 @@
+/* ---- project colours in the Explorer ---- */
+.node.proj { box-shadow: inset 3px 0 0 var(--pc); }
+.node .ptag { margin-left: 6px; font-size: 9px; font-weight: 700; letter-spacing: .06em; color: var(--pc); border: 1px solid var(--pc); border-radius: 3px; padding: 0 4px; opacity: .9; line-height: 14px; }
+.node.root.proj { border-bottom-color: var(--pc); }
+#statusbar { border-top: 2px solid var(--project-color, transparent); }
+
+/* ---- code advisor ---- */
+.monaco-editor .cns-solid-line { background: rgba(255, 152, 0, .10); border-left: 3px solid #ff9800; }
+.monaco-editor .cns-solid-name { text-decoration: underline wavy #ff9800; text-underline-offset: 3px; color: #ffb74d !important; }
+.monaco-editor .cns-glyph-solid { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2 15 14H1z' fill='%23ff9800'/%3E%3Cpath d='M7.3 6h1.4v4H7.3zM7.3 10.7h1.4V12H7.3z' fill='%23111'/%3E%3C/svg%3E") center / 14px 14px no-repeat; cursor: pointer; }
+.monaco-editor .cns-tip-ul { border-bottom: 1px dotted #4fc3f7; }
+.monaco-editor .cns-lombok-ul { border-bottom: 1px dotted #b39ddb; }
+.monaco-editor .cns-glyph-tip::before, .monaco-editor .cns-glyph-lombok::before { content: "\1F4A1"; font-size: 11px; display: block; text-align: center; line-height: 18px; cursor: pointer; }
+.monaco-editor .cns-glyph-lombok::before { content: "\1F9E9"; }
+#st-advice { cursor: pointer; } #st-advice .ad-solid { color: #ffb74d; font-weight: 700; }
+.prob.sug.solid .pico { color: #ffb74d; } .prob.sug .pmsg { color: var(--fg); }
+.sug-bar { display: flex; gap: 10px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); } .sug-bar button { padding: 3px 10px; }
+.adv-toast { position: fixed; right: 18px; bottom: 36px; z-index: 60; width: 340px; background: var(--bg2); border: 1px solid #4fc3f7; border-radius: 8px; padding: 10px 12px; box-shadow: 0 10px 34px rgba(0,0,0,.55); }
+.adv-toast.solid { border-color: #ff9800; } .adv-toast.lombok { border-color: #b39ddb; }
+.adv-toast .at-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 12px; } .adv-toast .at-title { margin: 6px 0 8px; font-size: 13px; } .adv-toast .at-actions { display: flex; gap: 8px; }
+.adv .adv-cat { color: var(--accent2); font-size: 12px; margin-bottom: 6px; } .adv .adv-detail { color: #ffb74d; font-weight: 600; }
+.adv-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } @media (max-width: 1100px) { .adv-cols { grid-template-columns: 1fr; } }
+.adv-lbl { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 4px; } .adv-lbl.old { color: var(--danger); } .adv-lbl.new { color: var(--ok); }
+pre.adv-code { margin: 0; background: #0b0c09; border: 1px solid var(--line); border-radius: 6px; padding: 10px; font: 12px/1.5 Monospaced, "Courier New", monospace; overflow: auto; max-height: 340px; white-space: pre; }

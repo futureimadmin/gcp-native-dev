@@ -2,21 +2,29 @@
 'use strict';
 
 async function openSettings(tab) {
-  state.settings = await inv('settings:get').catch(() => state.settings);
-  await loadAi();
-  state.plugins = await inv('host:plugins').catch(() => state.plugins);
-  state.info = await inv('app:info').catch(() => state.info);
+  // Open at once with what we already know; refresh in the background (sign-in checks can take seconds and must never block the dialog).
   const body = h('div', { class: 'settings' });
   const nav = h('div', { class: 'snav' });
   const pane = h('div', { class: 'spane' });
   body.append(nav, pane);
   const tabs = { general: ['General', generalPane], runtimes: ['Runtimes', runtimesPane], clouds: ['Clouds', cloudsPane], ai: ['AI', aiPane], plugins: ['Plugins', pluginsPane], about: ['About', aboutPane] };
-  const close = modal('Settings', body, [h('button', { class: 'primary', text: 'Done', onclick: () => { close(); renderAiPanel(); renderHome(); } })], { wide: true });
+  let current = 'general';
+  let open = true;
+  const close = modal('Settings', body, [h('button', { class: 'primary', text: 'Done', onclick: () => { open = false; close(); renderAiPanel(); renderHome(); } })], { wide: true });
   const show = (id) => {
+    current = id;
     nav.replaceChildren(...Object.entries(tabs).map(([k, [label]]) => h('button', { class: k === id ? 'active' : '', text: label, onclick: () => show(k) })));
     pane.replaceChildren(tabs[id][1](() => show(id)));
   };
   show(tabs[tab] ? tab : 'general');
+  const refresh = async () => {
+    const [s, pl, info] = await Promise.all([inv('settings:get').catch(() => null), inv('host:plugins').catch(() => null), inv('app:info').catch(() => null), loadAi()]);
+    if (s) state.settings = s;
+    if (pl) state.plugins = pl;
+    if (info) state.info = info;
+    if (open && ['ai', 'plugins', 'about'].includes(current)) show(current); // only panes that show fetched data are redrawn, so nothing you are typing is lost
+  };
+  refresh();
 }
 
 function generalPane() {
@@ -35,6 +43,14 @@ function generalPane() {
   delay.onchange = () => save('checkDelay', Number(delay.value));
   const sweep = h('input', { type: 'checkbox', checked: (state.settings.editor || {}).checkModule === true });
   sweep.onchange = () => save('checkModule', sweep.checked);
+  const adv = state.settings.advisor || {};
+  const advSave = async (k, v) => { await tryInv('settings:set', 'advisor.' + k, v); state.settings.advisor = { ...(state.settings.advisor || {}), [k]: v }; if (typeof advSchedule === 'function') advSchedule(50); };
+  const advOnBox = h('input', { type: 'checkbox', checked: adv.enabled !== false });
+  advOnBox.onchange = () => advSave('enabled', advOnBox.checked);
+  const solidBox = h('input', { type: 'checkbox', checked: adv.solid !== false });
+  solidBox.onchange = () => advSave('solid', solidBox.checked);
+  const toastBox = h('input', { type: 'checkbox', checked: adv.toasts !== false });
+  toastBox.onchange = () => advSave('toasts', toastBox.checked);
   return h('div', {}, h('h3', { text: 'General' }),
     h('label', { text: 'Editor font size' }), size,
     h('label', { text: 'Auto-save' }), mode,
@@ -43,6 +59,11 @@ function generalPane() {
     h('label', { class: 'inline' }, sweep, ' Also check the whole module after each check, so problems in other files show up too (slower on big modules)'),
     h('label', { class: 'inline' }, build, ' Also auto-build Kotlin, TypeScript, Go and C# projects on save (off by default)'),
     h('label', { class: 'inline' }, prompt, ' Ask me to sign in to Google Cloud at startup when no Application Default Credentials are found'),
+    h('h3', { text: 'Code advisor' }),
+    h('label', { class: 'inline' }, advOnBox, ' Suggest modern alternatives while I code (Java, JavaScript / TypeScript, Python): concurrency, CompletableFuture, lambdas, streams, generics, async / await, Lombok'),
+    h('label', { class: 'inline' }, solidBox, ' Show SOLID warnings in orange on the class'),
+    h('label', { class: 'inline' }, toastBox, ' Pop up a small notice when I write old-style code'),
+    h('div', { class: 'row' }, h('button', { text: 'Re-enable suggestions I switched off', onclick: () => CNS.run('advisor.resetIgnored') })),
     h('p', { class: 'hint', text: 'Fonts follow the NetBeans defaults: Segoe UI for the interface, Monospaced for the editor.' }));
 }
 
@@ -82,7 +103,7 @@ function cloudsPane() {
 
 function aiPane(rerender) {
   const ai = state.ai;
-  if (!ai) return h('div', { class: 'hint', text: 'Loading…' });
+  if (!ai) return h('div', { class: 'hint', text: 'Checking your AI sign-ins…' });
   const cards = ai.api.map((a) => {
     const key = h('input', { type: 'password', placeholder: a.keySet ? '•••••••• (stored)' : 'API key', autocomplete: 'off' });
     const msg = h('div', { class: 'msg' });
@@ -94,7 +115,7 @@ function aiPane(rerender) {
         h('div', { class: 'msg ' + (a.ready ? 'ok' : ''), text: a.statusText }),
         h('label', { text: 'Model' }), h('input', { value: a.model, list: 'models-' + a.id, onchange: async (e) => { await tryInv('ai:setConfig', a.id, { model: e.target.value.trim() }); } }),
         h('datalist', { id: 'models-' + a.id }, a.models.map((m) => h('option', { value: m }))),
-        h('div', { class: 'row' }, a.canLogin && !a.ready ? h('button', { class: 'primary', text: 'Sign in', onclick: () => aiSignIn(a.id) }) : null, h('button', { text: 'Re-check', onclick: async () => { await loadAi(); rerender(); } })));
+        h('div', { class: 'row' }, a.canLogin && !a.ready ? h('button', { class: 'primary', text: 'Sign in', onclick: () => aiSignIn(a.id) }) : null, h('button', { text: 'Re-check', onclick: async () => { await loadAi(true); rerender(); } })));
     }
     return h('div', { class: 'card' }, h('div', { class: 'cardh' }, h('span', { class: `dot ${a.keySet || !a.needsKey ? 'ok' : 'off'}` }), h('b', { text: a.name })),
       h('div', { class: 'hint', text: a.help }),

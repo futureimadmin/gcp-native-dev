@@ -79,6 +79,9 @@ function register({ ipcMain, wrap, tools, getWorkspace, cacheRoot }) {
     // match the module's Java level (language features and APIs); skip if newer than this JDK
     if (mod.release && mod.release >= 8 && mod.release <= feature) lines.push(`--release ${mod.release}`);
     if (cp.length) lines.push(`-cp "${cp.map(fwd).join(path.delimiter)}"`);
+    // Lombok generates getters/builders/loggers while compiling: hand its jar to javac as the annotation processor so those are not reported as errors
+    const lombok = cp.find((j) => /^lombok-[\d.]+(?:-[\w.]+)?\.jar$/i.test(path.basename(j)));
+    if (lombok) lines.push(`-processorpath "${fwd(lombok)}"`);
     if (sp.length) lines.push(`-sourcepath "${sp.map(fwd).join(path.delimiter)}"`);
     lines.push(...extra);
     return { lines, cpCount: cp.length };

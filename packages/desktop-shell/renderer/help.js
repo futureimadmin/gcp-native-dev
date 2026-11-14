@@ -84,7 +84,7 @@ const HELP = [
     H2('Least privilege'),
     P('The service list shows only what your identity is allowed to use. Services you cannot access are hidden rather than shown with errors.'),
     H2('Working with services inside the IDE'),
-    P('Click a service (for example Cloud Run) in the Clouds view. A tab opens in the workspace listing your resources of that type with their region and status. Select one to see its full configuration, read its logs, open the running application in the IDE browser, copy its name or ask the AI assistant to review it. These actions are read-only: nothing changes in your cloud.'),
+    P('Click a service (for example Cloud Run) in the Clouds view. A tab opens in the workspace listing your resources of that type with their region and status. Select one to see its full configuration, read its logs, open the running application in the IDE browser, copy its name or ask the AI assistant to review it. For a Cloud Storage bucket the tab also lets you browse its folders and files (sizes and dates, a path bar to go up) and preview the first 64 KB of text files. These actions are read-only: nothing changes in your cloud.'),
     P('Resource lists exist for Cloud Run, Cloud Functions, GKE, Cloud Storage, Cloud SQL, Secret Manager (names only), Artifact Registry, Cloud Build and Pub/Sub. Other services show a short note and a button that opens the provider console in your normal browser.'),
   ] },
 
@@ -155,6 +155,24 @@ const HELP = [
     UL('Generate getters, setters, constructor, toString and equals/hashCode; override inherited methods (Alt+Insert).', 'Organize Imports (Ctrl+Alt+O) removes unused imports, adds missing ones for known classes and sorts them.', 'Format Document (Shift+Alt+F) re-indents Java; Rename Symbol (F2) renames within the file.', 'File > New Java creates a class, interface, enum, record, annotation, a class with main() or a JUnit 5 test in the right package.'),
     H2('Many more editing commands'),
     P('The Edit menu has sub-menus for lines (duplicate, move, delete, join, sort, remove duplicates), selection (expand, multi-cursor), case transforms, folding and indentation. Everything is also in the command palette (Ctrl+Shift+P).'),
+  ] },
+
+  { id: 'menus', title: 'Right-click menus & project colours', body: [
+    ['h1', 'Right-click menus and project colours'],
+    P('Every project folder in the Explorer is recognised by what is inside it and gets a colour stripe and a small tag: Maven, Spring Boot, Quarkus, Gradle, Ant, React, Next.js, Angular, Vue, Svelte, NestJS, Node, Python, Django, Flask, FastAPI, Go, Rust, .NET, PHP, Ruby, Flutter, Terraform, Helm and Docker. In a monorepo every sub-project has its own colour, and the status bar edge takes the colour of the open project.'),
+    H2('What each menu offers'),
+    UL('Project folder: New (class, component, module ... for that kind of project), the build tool (Maven, Gradle, npm/pnpm/yarn with all scripts from package.json, pip/pytest, Cargo, dotnet ...), Git, Format, Refactor, Lombok (Java), Analyze, Open Terminal Here.',
+      'Java package: New class / interface / enum / record / test / sub-package, Format all files, Refactor > Rename Package (updates package lines, imports and Spring/XML settings and moves the folder), Analyze package.',
+      'Java class: Generate (getters, setters, constructor, toString, equals/hashCode, override methods, unit test, extract interface), Lombok, Refactor (Rename Class, Move to Another Package, Extract Interface, Organize Imports), Navigate, Analyze, Git.',
+      'Other files and folders: Run (node, python, go), Format, Analyze, Git (status, diff, history, blame, stage, discard), Rename, Recycle Bin, Copy path.'),
+    P('Commands run in the Terminal panel so you see exactly what is executed. Nothing runs until you pick it. Refactorings that touch many files show how many files and occurrences change and ask first; Git can undo them.'),
+    H2('Code advisor'),
+    P('While you type, the IDE looks for old-style code and shows a better way. Hover the mark to see the OLD and the MODERN sample code, or click Show side by side. Safe cases have Apply (Ctrl+. also offers it). A small pop-up appears when you have just written old-style code.'),
+    UL('Orange on a class: a SOLID principle is violated (too many responsibilities, type-check chains that need polymorphism, an override that throws UnsupportedOperationException, a fat interface, a class that creates its own services).',
+      'Blue dotted mark and a lightbulb: a more modern way exists. Java: ExecutorService and virtual threads instead of new Thread, ConcurrentHashMap and CopyOnWriteArrayList, CompletableFuture (timeouts, error handling, allOf, thenCompose), lambdas and method references, Comparator.comparing, streams, Optional, generics (diamond, raw types, wildcards), records, switch expressions, pattern matching, text blocks, java.time, try-with-resources.',
+      'Purple dotted mark: Lombok can generate this (getters and setters, constructors, toString/equals, loggers, builders). Right-click the project > Lombok > Add Lombok dependency adds it to pom.xml or build.gradle; completion then knows the generated methods and the error check accepts them.',
+      'JavaScript / TypeScript / React: promises and async/await (parallel awaits, forEach(async), unhandled promises, fetch errors, timeouts), modern syntax, React hooks. Python: asyncio (blocking calls inside async def, gather, TaskGroup), pathlib, f-strings, dataclasses, safe defaults.'),
+    P('The SUGGESTIONS tab lists everything for the open file, or the whole project after Analyze whole project. Settings > General > Code advisor turns the advisor, the orange warnings or the pop-ups off. "Don’t suggest this again" hides one rule; Advisor: Re-enable All Suggestions brings them back.'),
   ] },
 
   { id: 'keys', title: 'Keyboard shortcuts', body: [

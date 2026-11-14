@@ -19,7 +19,25 @@ function initMonaco() {
     window.require(['vs/editor/editor.main'], () => {
       monaco = window.monaco;
       for (const l of monaco.languages.getLanguages()) for (const e of l.extensions || []) extLang.set(e.toLowerCase(), l.id);
-      monaco.editor.defineTheme('cns-dark', { base: 'vs-dark', inherit: true, rules: [], colors: { 'editor.background': '#0e0f0c', 'editor.lineHighlightBackground': '#151713' } });
+      monaco.editor.defineTheme('cns-dark', {
+        base: 'vs-dark', inherit: true,
+        // a colour for every kind of word, so code reads at a glance: keywords purple, types teal, annotations amber, strings green, numbers orange, calls blue
+        rules: [
+          { token: 'keyword', foreground: 'c792ea' }, { token: 'keyword.flow', foreground: 'ff79c6' }, { token: 'keyword.json', foreground: '6ab0f3' },
+          { token: 'type', foreground: '4ec9b0' }, { token: 'type.identifier', foreground: '4ec9b0' }, { token: 'namespace', foreground: '7fd1c8' },
+          { token: 'annotation', foreground: 'ffb454' }, { token: 'metatag', foreground: 'ffb454' }, { token: 'attribute.name', foreground: 'e9b872' }, { token: 'attribute.value', foreground: '9ece6a' },
+          { token: 'string', foreground: '9ece6a' }, { token: 'string.escape', foreground: '56d4dd' }, { token: 'string.key.json', foreground: '6ab0f3' }, { token: 'string.value.json', foreground: '9ece6a' },
+          { token: 'number', foreground: 'ff9e64' }, { token: 'number.float', foreground: 'ff9e64' }, { token: 'number.hex', foreground: 'ff9e64' },
+          { token: 'comment', foreground: '6f8f6a', fontStyle: 'italic' }, { token: 'comment.doc', foreground: '7fa57a', fontStyle: 'italic' },
+          { token: 'regexp', foreground: 'f7768e' }, { token: 'tag', foreground: 'f7768e' }, { token: 'predefined', foreground: '7aa2f7' }, { token: 'variable', foreground: 'e0af68' },
+          { token: 'delimiter', foreground: '9aa5b1' }, { token: 'delimiter.bracket', foreground: 'c0caf5' }, { token: 'operator', foreground: '89ddff' },
+          { token: 'identifier', foreground: 'dfe3d8' },
+        ],
+        colors: {
+          'editor.background': '#0e0f0c', 'editor.lineHighlightBackground': '#151713',
+          'editorBracketHighlight.foreground1': '#ffd166', 'editorBracketHighlight.foreground2': '#c792ea', 'editorBracketHighlight.foreground3': '#4fc3f7', 'editorBracketHighlight.foreground4': '#9ece6a', 'editorBracketHighlight.foreground5': '#ff9e64', 'editorBracketHighlight.foreground6': '#f7768e',
+        },
+      });
       editor = monaco.editor.create($('editor'), {
         theme: 'cns-dark', automaticLayout: true, minimap: { enabled: true },
         fontFamily: 'Monospaced, "Courier New", monospace', // NetBeans default editor font
@@ -217,7 +235,7 @@ async function buildDir(container, dir, opts = {}) {
     const toggle = async (open) => {
       kids.classList.toggle('hidden', !open);
       caret.textContent = open ? '▾' : '▸';
-      if (open && !loadP) loadP = buildDir(kids, e.path, { pkg });
+      if (open && !loadP) loadP = buildDir(kids, e.path, { pkg, depth: (opts.depth || 0) + 1 });
       if (open) await loadP;
     };
     node.addEventListener('click', async () => {
@@ -225,7 +243,9 @@ async function buildDir(container, dir, opts = {}) {
       if (e.isDir) await toggle(kids.classList.contains('hidden'));
       else openFile(e.path);
     });
-    node.addEventListener('contextmenu', (ev) => { ev.preventDefault(); ev.stopPropagation(); selected = e; ctxMenu(ev.clientX, ev.clientY, fileMenuItems(e)); });
+    e.isPkg = !!(pkg && e.isDir && !bold);
+    e.pkgRoot = !!(pkg && bold && e.isDir);
+    node.addEventListener('contextmenu', (ev) => showExplorerMenu(ev, e));
     node._toggle = toggle; // lets "reveal in Explorer" open folders programmatically
     container.append(node, kids);
     if (expand) toggle(true);
@@ -243,6 +263,7 @@ async function buildDir(container, dir, opts = {}) {
     else if (/\.(java|kt|scala|groovy)$/i.test(e.name)) icon = '☕';
     addNode(e, { label, icon, pkg: opts.pkg });
   }
+  if (!opts.pkg && (opts.depth || 0) <= 2 && typeof paintProjectChildren === 'function') paintProjectChildren(container, entries); // colour project folders without delaying the tree
 }
 
 async function refreshTree() {
@@ -253,13 +274,14 @@ async function refreshTree() {
   tree.append(makeRootNode());
   await buildDir(tree, state.workspace);
   markTree();
+  if (typeof paintRoot === 'function') paintRoot();
 }
 
 function makeRootNode() {
-  const node = h('div', { class: 'node root', 'data-path': state.workspace, title: 'Right-click for Cloud Native Dev' },
+  const node = h('div', { class: 'node root', 'data-path': state.workspace, title: 'Right-click for project actions' },
     h('span', { class: 'caret', text: '▾' }), h('b', { text: baseName(state.workspace) }), h('span', { class: 'root-badge' }));
   node.addEventListener('click', () => { selected = { path: state.workspace, isDir: true }; });
-  node.addEventListener('contextmenu', (ev) => { ev.preventDefault(); selected = { path: state.workspace, isDir: true }; ctxMenu(ev.clientX, ev.clientY, projectMenuItems()); });
+  node.addEventListener('contextmenu', (ev) => showExplorerMenu(ev, { path: state.workspace, isDir: true, isRoot: true }));
   queueMicrotask(updateRootBadge);
   return node;
 }
@@ -342,6 +364,8 @@ function showPanel(which) {
   $('panel-terminal').classList.toggle('hidden', which !== 'terminal');
   $('panel-output').classList.toggle('hidden', which !== 'output');
   $('panel-problems').classList.toggle('hidden', which !== 'problems');
+  $('panel-suggestions').classList.toggle('hidden', which !== 'suggestions');
+  if (which === 'suggestions' && typeof renderAdvice === 'function') renderAdvice();
   if (which === 'terminal') $('term-input').focus();
 }
 
@@ -376,7 +400,7 @@ function wireWorkbench() {
   $('btn-refresh').onclick = refreshTree;
   $('btn-open-folder').onclick = () => openFolderDialog();
   $('tree').addEventListener('contextmenu', (e) => {
-    if (e.target === $('tree') && state.workspace) { e.preventDefault(); ctxMenu(e.clientX, e.clientY, projectMenuItems()); }
+    if (e.target === $('tree') && state.workspace) showExplorerMenu(e, { path: state.workspace, isDir: true, isRoot: true });
   });
   window.addEventListener('beforeunload', () => state.tabs.forEach((t) => t.kind === 'file' && t.model.dispose()));
 }

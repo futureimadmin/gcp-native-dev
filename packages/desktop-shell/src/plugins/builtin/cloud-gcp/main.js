@@ -108,7 +108,7 @@ exports.activate = (ctx) => {
   };
 
   const PROJ_OK = (s) => PROJECT_RE.test(String(s));
-  const item_ok = (it) => it && ID_OK.test(String(it.id || '')) && ID_OK.test(String(it.name || '')) && (!it.region || /^[a-z0-9-]{2,40}$/.test(it.region));
+  const item_ok = (it) => it && ID_OK.test(String(it.id || '')) && ID_OK.test(String(it.name || '')) && (!it.region || /^[A-Za-z0-9-]{2,40}$/.test(it.region));
   const gc = async (scope, args, timeout = 60000) => {
     const r = await exec('gcloud', [...args, `--project=${scope}`, '--quiet'], { timeout });
     if (!r.ok) throw new Error((r.err || r.out || 'gcloud failed').split(/\r?\n/).filter(Boolean).slice(-3).join(' '));
@@ -224,6 +224,54 @@ exports.activate = (ctx) => {
       const l = LISTERS[key];
       if (!PROJ_OK(scope) || !l || !l.logs || !item_ok(it)) throw new Error('Logs are not available for this resource.');
       return gc(scope, l.logs(scope, it), 90000);
+    },
+
+    /** Cloud Storage: folders and files directly under bucket/prefix (read-only). */
+    async objects(scope, bucket, prefix) {
+      const BUCKET_RE = /^[a-z0-9][a-z0-9._-]{1,220}$/;
+      const PREFIX_RE = /^[^"%^&|<>`\r\n\\*?[\]]{0,1000}$/; // no glob characters: the prefix is a literal folder path
+      const pre = String(prefix || '');
+      if (!PROJ_OK(scope) || !BUCKET_RE.test(String(bucket)) || !PREFIX_RE.test(pre)) throw new Error('Invalid request.');
+      const folder = pre && !pre.endsWith('/') ? `${pre}/` : pre;
+      const listOnce = () => gc(scope, ['storage', 'ls', '--json', `gs://${bucket}/${folder}`], 90000);
+      let out = await listOnce();
+      if (out.indexOf('[') < 0) out = await listOnce(); // gcloud occasionally returns nothing the first time: retry once
+      let list = [];
+      try {
+        // gcloud sometimes prints notices around the JSON: parse from the first '[' to the last ']'
+        const s = out.indexOf('[');
+        const e = out.lastIndexOf(']');
+        list = s >= 0 && e > s ? JSON.parse(out.slice(s, e + 1)) : [];
+      } catch {
+        throw new Error(`Could not read the bucket listing. gcloud said: ${String(out).replace(/\s+/g, ' ').slice(0, 160)}`);
+      }
+      const base = `gs://${bucket}/${folder}`;
+      const folders = [];
+      const files = [];
+      for (const e of list.slice(0, 1500)) {
+        const url = String(e.url || '').replace(/#\d+$/, '');
+        const name = url.startsWith(base) ? url.slice(base.length) : url;
+        if (!name) continue;
+        if (e.type === 'prefix') folders.push({ name: name.replace(/\/$/, ''), prefix: `${folder}${name}` });
+        else { const md = e.metadata || {}; files.push({ name, object: `${folder}${name}`, size: Number(md.size || 0), updated: md.updated || md.timeCreated || '', contentType: md.contentType || '', storageClass: md.storageClass || '' }); }
+      }
+      folders.sort((a, b) => a.name.localeCompare(b.name));
+      files.sort((a, b) => a.name.localeCompare(b.name));
+      return { bucket, prefix: folder, folders, files, truncated: list.length > 1500 };
+    },
+
+    /** First 64 KB of a text object (read-only). */
+    async objectPreview(scope, bucket, object, contentType, size) {
+      const BUCKET_RE = /^[a-z0-9][a-z0-9._-]{1,220}$/;
+      const OBJ_RE = /^[^"%^&|<>`\r\n\\*?[\]]{1,1000}$/;
+      if (!PROJ_OK(scope) || !BUCKET_RE.test(String(bucket)) || !OBJ_RE.test(String(object))) throw new Error('This file name cannot be previewed here.');
+      const textual = /^(text\/|application\/(json|xml|javascript|x-javascript|yaml|x-yaml|x-sh|sql|csv|x-ndjson)|[\w.+-]+\/[\w.+-]*\+(json|xml))/i.test(String(contentType || '')) || /\.(txt|md|json|ya?ml|xml|csv|log|html?|css|js|ts|java|py|sh|sql|properties|conf|ini|toml|tf|gradle|kt|go|rb|php|cs|c|h|cpp)$/i.test(object);
+      if (!textual) throw new Error('This looks like a binary file, so it is not previewed. Use "Copy gs:// URL" and download it with gcloud if you need it.');
+      const big = Number(size) > 65536; // a byte range larger than the file makes gcloud fail, so only use one for big files
+      const r = await exec('gcloud', ['storage', 'cat', `gs://${bucket}/${object}`, ...(big ? ['-r', '0-65535'] : []), `--project=${scope}`, '--quiet'], { timeout: 60000 });
+      if (!r.ok) throw new Error((r.err || r.out || 'Could not read the file.').split(/\r?\n/).filter(Boolean).slice(-2).join(' '));
+      if (r.out.includes('\u0000')) throw new Error('This file contains binary data, so it is not previewed.');
+      return r.out;
     },
 
     actions: {
