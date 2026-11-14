@@ -20,6 +20,7 @@ exports.activate = (ctx) => {
   }
 
   ctx.cloud.register({
+    provision: require('./provision').build({ exec }, { CTX_RE }),
     id: 'k8s', name: 'Kubernetes (private cloud)', short: 'K8s', kind: 'private', color: '#326ce5',
     cli: { cmd: 'kubectl', install: 'https://kubernetes.io/docs/tasks/tools/' },
     scopeLabel: 'Cluster context',

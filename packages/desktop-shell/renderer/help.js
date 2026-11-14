@@ -88,6 +88,21 @@ const HELP = [
     P('Resource lists exist for Cloud Run, Cloud Functions, GKE, Cloud Storage, Cloud SQL, Secret Manager (names only), Artifact Registry, Cloud Build and Pub/Sub. Other services show a short note and a button that opens the provider console in your normal browser.'),
   ] },
 
+  { id: 'envs', title: 'Environments & architecture', body: [
+    ['h1', 'Environments and architecture'],
+    P('Enable Cloud Native Development (project menu, or the Clouds view). If no cloud is connected the IDE asks you to connect one first. Then the Cloud Native Architecture page opens: choose how many environments you want and what to call them (dev, sit, uat, prod, or qa, staging, live ... up to 8), and see how they will be built in every cloud you are connected to. Nothing is created until you press Provision.'),
+    H2('What is built in each cloud'),
+    UL('Google Cloud: one project per environment (the isolation boundary), grouped in a folder per environment under one application folder when you have an organization. Each project gets its APIs, an Artifact Registry repository and three service accounts (deployer, runtime, pipeline) with only the roles they need. You get read-only access and the right to impersonate the deployer account, so the IDE runs gcloud as that account: no keys, every change is audited. Without an organization (a personal Google account) there are no folders, so the projects are created side by side and labelled.',
+      'AWS: one CloudFormation stack per environment from a single template (written to infra/cnd-environments/aws): container registry, private encrypted bucket, log group, a runtime role and a deployer role that you assume for short-lived credentials. Protected environments get immutable image tags, versioned data, longer logs and termination protection.',
+      'Azure: one resource group per environment from a single Bicep template: Container Apps environment, Log Analytics, Container Registry, Key Vault and two managed identities. Access is granted on the resource group (Contributor on dev-like, Reader on protected), so a mistake in dev cannot reach prod.',
+      'Kubernetes: one namespace per environment with resource quota, default limits, default-deny network policy, Pod Security level and a namespace-only deployer service account.'),
+    H2('Protected environments'),
+    P('Mark any environment protected (prod is by default). Protected environments get the stricter settings above, you get read-only access, and Provision (and later cloud-changing actions) asks you to type a word first.'),
+    H2('Provisioning'),
+    P('Show every step and command lists exactly what will run. Provision runs the steps one at a time with live progress; steps for things that already exist are skipped, so you can run it again to add an environment or repair a failure. A failure in one environment does not stop the others. The result is saved in .cnd/project.json, and switching environment then switches project, account or resource group and the impersonated identity with it. Save a copy of the plan writes it to docs/environments for review.'),
+    P('You need permission to create these things (for Google Cloud: Folder Creator, Project Creator and Billing Account User; for Azure: Owner on the subscription, because role assignments are created; for AWS: rights to create IAM roles and CloudFormation stacks). The page lists what is needed for each cloud.'),
+  ] },
+
   { id: 'cnmode', title: 'Cloud Native mode & CI/CD', body: [
     ['h1', 'Cloud Native Development mode'],
     P('Right-click a project and choose Enable Cloud Native Development to bind it to a cloud, a project or account, an environment (dev, sit, uat, prod) and a service name. The toolbar and status bar then show the cloud and environment, and CI/CD, Deploy and Create Resource become available.'),

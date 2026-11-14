@@ -74,7 +74,8 @@ function boot() {
     getWorkspace: () => workspace,
   });
   host.loadAll();
-  cloudflow.register({ ipcMain, wrap, host, terminal, send: sendToRenderer });
+  const flow = cloudflow.register({ ipcMain, wrap, host, terminal, send: sendToRenderer });
+  require('./core/provision').register({ ipcMain, wrap, host, send: sendToRenderer, cloudflow: flow });
   projects.register({ ipcMain, wrap, host, send: sendToRenderer, store });
   ai.register({ ipcMain, wrap, host, store, secrets, terminal, send: sendToRenderer });
   runtime.register({ ipcMain, wrap, tools });

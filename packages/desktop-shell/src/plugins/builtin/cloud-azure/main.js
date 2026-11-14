@@ -37,6 +37,7 @@ exports.activate = (ctx) => {
   ].join('\n');
 
   ctx.cloud.register({
+    provision: require('./provision').build({ exec }, { REGION_RE }),
     id: 'azure', name: 'Microsoft Azure', short: 'Azure', kind: 'public', color: '#0078d4',
     cli: { cmd: 'az', install: 'https://learn.microsoft.com/cli/azure/install-azure-cli' },
     scopeLabel: 'Subscription',

@@ -145,6 +145,7 @@ exports.activate = (ctx) => {
   };
 
   ctx.cloud.register({
+    provision: require('./provision').build({ exec }),
     id: 'gcp', name: 'Google Cloud', short: 'GCP', kind: 'public', color: '#4285f4',
     cli: { cmd: 'gcloud', install: 'https://cloud.google.com/sdk/docs/install' },
     scopeLabel: 'Project',

@@ -73,6 +73,7 @@ exports.activate = (ctx) => {
   ].join('\n');
 
   ctx.cloud.register({
+    provision: require('./provision').build({ exec }, { pArg, regionOf, profile, REGION_RE }),
     id: 'aws', name: 'Amazon Web Services', short: 'AWS', kind: 'public', color: '#ff9900',
     cli: { cmd: 'aws', install: 'https://aws.amazon.com/cli/' },
     scopeLabel: 'Profile',

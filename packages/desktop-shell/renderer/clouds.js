@@ -2,7 +2,7 @@
 'use strict';
 
 const ENVS = ['dev', 'sit', 'uat', 'prod'];
-const PROJ_DEFAULT = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '' };
+const PROJ_DEFAULT = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '', envs: null, targets: {} };
 
 const cloudMeta = (id) => state.clouds.find((c) => c.id === id) || { id, name: id, short: id, scopeLabel: 'Scope', regions: [] };
 const cnOn = () => !!(state.workspace && state.proj && state.proj.enabled);
@@ -234,13 +234,13 @@ function bindingPanel() {
   const c = boundCloud();
   const cloudSel = h('select', { onchange: (e) => saveProject({ cloud: e.target.value }).then(() => { const id = e.target.value; if (cloudSignedIn(id) && !state.proj.scope && (state.cloudStatus[id] || {}).scope) saveProject({ scope: state.cloudStatus[id].scope }).catch(() => {}); }).catch(() => {}) },
     state.clouds.map((x) => h('option', { value: x.id, text: x.name, selected: x.id === p.cloud })));
-  const envSel = h('select', { onchange: (e) => switchEnv(e.target.value) }, ENVS.map((e) => h('option', { value: e, text: e, selected: e === p.env })));
+  const envSel = h('select', { onchange: (e) => switchEnv(e.target.value) }, envList().map((e) => h('option', { value: e, text: e, selected: e === p.env })));
   const regionSel = c.regions && c.regions.length > 1
     ? h('select', { onchange: (e) => saveProject({ region: e.target.value }).catch(() => {}) }, c.regions.map((r) => h('option', { value: r, text: r, selected: r === p.region })))
     : null;
   const group = c.id === 'azure' ? h('input', { value: p.group, placeholder: 'resource group', onchange: (e) => saveProject({ group: e.target.value.trim() }).catch(() => {}) }) : null;
   const sa = c.id === 'gcp' ? h('select', { id: 'impersonate-select', onchange: (e) => setImpersonation(e.target.value) }, h('option', { value: '', text: 'My user credentials' }),
-    p.scope ? ['env', 'dev', 'cicd', 'obs'].map((k) => { const v = `cnd-${k === 'env' ? p.env : k}-sa@${p.scope}.iam.gserviceaccount.com`; return h('option', { value: v, text: v.split('@')[0], selected: v === p.impersonate }); }) : []) : null;
+    p.scope ? [`cnd-${p.env}-sa`, 'cnd-cicd-sa'].map((k) => { const v = `${k}@${p.scope}.iam.gserviceaccount.com`; return h('option', { value: v, text: k, selected: v === p.impersonate }); }) : []) : null;
 
   const act = (label, fn, cn = true) => h('button', { class: cn ? 'cn-action' : '', text: label, onclick: fn, disabled: cn ? !cnReady() : false });
   return h('div', { class: 'card cn' },
@@ -255,7 +255,7 @@ function bindingPanel() {
     h('label', { text: 'Actions' }),
     h('div', { class: 'actgrid' },
       act('Run CI/CD', runPipeline), act('Deploy', deployNow), act('Create resource…', createResource),
-      act('Generate pipeline', generatePipeline, false), act('Bootstrap (Terraform)', bootstrapDialog, false), act('Open console', openConsole)),
+      act('Architecture & Provision…', openLanding, false), act('Generate pipeline', generatePipeline, false), act('Bootstrap (Terraform)', bootstrapDialog, false), act('Open console', openConsole)),
     h('button', { class: 'wide subtle', text: 'Disable Cloud Native Development', onclick: disableMode }));
 }
 
@@ -272,23 +272,6 @@ function applyModeButtonsOnly() {
 
 /* ------------------------------ enable / disable / environment ------------------------------ */
 
-async function enableMode() {
-  if (!state.workspace) return status('Open a folder first.', true);
-  // Prefer a cloud you are signed in to.
-  const cur = (state.proj || PROJ_DEFAULT).cloud;
-  const signed = state.clouds.filter((c) => cloudSignedIn(c.id));
-  const cloud = cloudSignedIn(cur) || !signed.length ? cur : signed[0].id;
-  const patch = { enabled: true, cloud };
-  const st = state.cloudStatus[cloud];
-  if (st && st.signedIn && st.scope && !(state.proj && state.proj.scope)) patch.scope = st.scope;
-  try { await saveProject(patch); } catch { return; }
-  showView('clouds');
-  status('Cloud Native Development enabled for this project.');
-  if (!cloudSignedIn(state.proj.cloud)) cloudLogin(state.proj.cloud);
-  else if (!state.proj.scope) chooseScope(state.proj.cloud);
-  renderHome();
-}
-
 async function disableMode() {
   if (!(await confirmBox('Turn off Cloud Native Development for this project?', 'Nothing in the cloud is changed. Your .cnd/project.json is kept.'))) return;
   try { await saveProject({ enabled: false }); } catch { return; }
@@ -299,12 +282,12 @@ async function disableMode() {
 async function switchEnv(env) {
   if (!cnOn() || env === state.proj.env) return;
   try { await saveProject({ env, impersonate: '' }); } catch { return; }
-  status(env === 'prod' ? 'Environment: PROD. Cloud-changing actions need extra confirmation.' : `Environment: ${env}`);
+  status(isProtectedEnv(env) ? `Environment: ${env} (protected). Cloud-changing actions need extra confirmation.` : `Environment: ${env}`);
 }
 
 function switchEnvDialog() {
   if (!cnOn()) return status('Enable Cloud Native Development first.', true);
-  const close = modal('Switch environment', h('div', { class: 'envpick' }, ENVS.map((e) => h('button', { class: e === state.proj.env ? 'primary' : '', text: e, onclick: () => { close(); switchEnv(e); } }))), [h('button', { text: 'Cancel', onclick: () => close() })]);
+  const close = modal('Switch environment', h('div', { class: 'envpick' }, envList().map((e) => h('button', { class: e === state.proj.env ? 'primary' : '', text: e, onclick: () => { close(); switchEnv(e); } }))), [h('button', { text: 'Cancel', onclick: () => close() })]);
 }
 
 async function setImpersonation(sa) {
@@ -336,14 +319,14 @@ async function generatePipeline() {
 /** Shows the exact command; requires a click (and typing "prod" for production); then runs it. */
 function confirmCommand(info, what) {
   return new Promise((resolve) => {
-    const isProd = info.env === 'prod';
+    const isProd = info.protected || info.env === 'prod';
     const typed = h('input', { placeholder: 'Type prod to continue' });
     const run = h('button', { class: 'primary', text: 'Run', disabled: isProd });
     typed.oninput = () => (run.disabled = typed.value.trim() !== 'prod');
     const body = h('div', {}, h('p', { text: what }),
       h('div', { class: 'kv' }, `${info.cloud}: `, h('b', { text: info.scope }), '   Environment: ', h('b', { class: isProd ? 't-err' : '', text: info.env })),
       h('label', { text: 'Command' }), h('pre', { text: info.command }),
-      isProd ? h('p', { class: 'msg err', text: 'This targets PRODUCTION.' }) : null, isProd ? typed : null);
+      isProd ? h('p', { class: 'msg err', text: 'This targets a PROTECTED environment.' }) : null, isProd ? typed : null);
     const close = modal(info.title, body, [
       h('button', { text: 'Cancel', onclick: () => { close(); resolve(false); } }),
       Object.assign(run, { onclick: () => { close(); resolve(true); } }),
@@ -394,7 +377,7 @@ async function createResource() {
 
 async function bootstrapDialog() {
   if (!cnOn()) return status('Enable Cloud Native Development first.', true);
-  const checks = ENVS.map((e) => h('input', { type: 'checkbox', value: e, checked: true }));
+  const checks = envList().map((e) => h('input', { type: 'checkbox', value: e, checked: true }));
   const msg = h('div', { class: 'msg' });
   const close = modal('Bootstrap environments (Terraform)', h('div', {},
     h('p', { class: 'hint', text: `Generates infrastructure-as-code for ${boundCloud().name} into your project. Nothing is applied to your cloud account.` }),
@@ -433,6 +416,7 @@ function projectMenuItems() {
     const ready = cnReady();
     const s = state.cloudStatus[p.cloud] || {};
     items.push('-',
+      { label: 'Architecture & Provision Environments…', run: openLanding },
       { label: 'Run CI/CD Pipeline', run: runPipeline, disabled: !ready },
       { label: 'Deploy', run: deployNow, disabled: !ready },
       { label: 'Create Cloud Resource…', run: createResource, disabled: !ready },

@@ -1,0 +1,37 @@
+/* Cloud Native Architecture page */
+.landing { max-width: 1280px; margin: 0 auto; padding-bottom: 90px; }
+.landing h2 { margin: 0 0 4px; } .landing .card { margin-bottom: 12px; }
+.landing input.bad, .envchip input.bad { border-color: var(--danger); }
+.row.wrap { flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.envs { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
+.envchip { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--bg); }
+.envchip.prot { border-color: #d9776b; } .envchip input.envname { width: 110px; font-weight: 700; }
+.envchip label.small { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 4px; margin: 0; }
+.ctabs { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+.ctabs button { border-bottom: 3px solid transparent; } .ctabs button.active { border-bottom-color: var(--cc); background: var(--bg3); } .ctabs button.off { opacity: .6; }
+.cloudpanel { border-left: 4px solid var(--cc); } .cloudpanel h3 { margin: 8px 0 2px; } .cloudpanel .summary { color: var(--dim); max-width: 1000px; }
+.opts { display: grid; grid-template-columns: max-content minmax(240px, 420px); gap: 6px 12px; align-items: center; margin: 6px 0 10px; } .opts .adv-opts { grid-column: 1 / -1; }
+.opts .adv-opts .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; } .opts .adv-opts input { flex: 1; }
+.archwrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0c09; padding: 6px; margin: 10px 0; max-height: 640px; }
+svg.arch { display: block; } svg.arch text { font: 11px "Segoe UI", sans-serif; fill: var(--fg); }
+.a-edge { fill: none; stroke: #5c6659; stroke-width: 1.5; }
+.a-box { fill: #171914; stroke: #4a5247; stroke-width: 1.3; }
+.a-org .a-box, .a-account .a-box { fill: #1a2230; stroke: #4f7fc7; }
+.a-group .a-box, .a-folder .a-box { fill: #231f14; stroke: #c9a24b; }
+.a-project .a-box, .a-stack .a-box, .a-rg .a-box, .a-namespace .a-box { fill: #141c17; stroke: var(--cc); }
+.a-prot .a-box { stroke: #d9776b; stroke-width: 2; }
+.a-head { font-weight: 700; font-size: 12px !important; } .a-sub { fill: var(--dim) !important; } .a-item { fill: #c9cfc3 !important; font-size: 10.5px !important; }
+.a-badge { font-size: 9px !important; font-weight: 700; letter-spacing: .06em; } .a-badge.nw { fill: #7fbf8a !important; } .a-badge.ex { fill: #9a9c93 !important; } .a-lock { fill: #d9776b !important; font-size: 9px !important; font-weight: 700; }
+.cols2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; } @media (max-width: 1000px) { .cols2 { grid-template-columns: 1fr; } }
+table.acc { border-collapse: collapse; width: 100%; font-size: 12px; } table.acc td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; } table.acc td.who { font-weight: 700; white-space: nowrap; }
+.landing h4 { margin: 10px 0 4px; color: var(--accent2); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; } .landing ul { margin: 4px 0 8px 18px; padding: 0; }
+.msg.warn { color: #e0b44f; }
+details.steps { margin-top: 10px; } details.steps summary { cursor: pointer; color: var(--accent2); }
+.envsteps { margin: 8px 0; } .envtag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; margin: 4px 0; }
+.pstep { display: flex; gap: 8px; padding: 3px 0; font-size: 12px; } .pstep .st { width: 16px; text-align: center; flex: none; } .pstep code { display: block; color: var(--dim); font: 11px Monospaced, monospace; word-break: break-all; white-space: pre-wrap; }
+.pstep .st.ok { color: var(--ok); } .pstep .st.failed { color: var(--danger); } .pstep .st.warn { color: #e0b44f; } .pstep .st.skipped { color: var(--dim); } .pstep .smsg { color: var(--danger); font-size: 11px; white-space: pre-wrap; }
+.pstep .st.ok ~ .sbody .smsg, .pstep .st.skipped ~ .sbody .smsg { color: var(--dim); }
+.provbar { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; box-shadow: 0 -6px 20px rgba(0,0,0,.4); }
+button.big { padding: 8px 26px; font-size: 14px; }
+.progress { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; margin: 8px 0; } .progress .bar { height: 100%; background: var(--ok); transition: width .3s; } .progress .bar.bad { background: var(--danger); }
+.runcard { border: 1px solid var(--accent); }
