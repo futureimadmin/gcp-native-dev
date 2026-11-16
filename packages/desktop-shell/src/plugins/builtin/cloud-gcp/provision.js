@@ -33,19 +33,43 @@ exports.build = (ctx) => {
     const acct = await exec('gcloud', ['auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'], { timeout: 25000 });
     const account = acct.ok ? acct.out.split(/\r?\n/)[0].trim() : '';
     if (!account) return { signedIn: false, account: '', orgs: [], billing: [], projects: [] };
-    const [orgs, billing, projects] = await Promise.all([
-      exec('gcloud', ['organizations', 'list', '--format=json'], { timeout: 40000 }),
+    const parse = (r) => { try { return JSON.parse(r.out || '[]'); } catch { return []; } };
+    const toOrg = (o) => ({ id: String(o.name || '').replace('organizations/', ''), name: o.displayName || o.name });
+    // The organization list is what the wizard hangs on, so it is looked up first, on its own (several gcloud processes at once can
+    // trip over each other), retried, and cross-checked against the organization above the current project.
+    let orgs = null;
+    let orgList = [];
+    for (let i = 0; i < 3 && !orgList.length; i++) {
+      orgs = await exec('gcloud', ['organizations', 'list', '--format=json'], { timeout: 40000 });
+      orgList = parse(orgs).map(toOrg).filter((o) => ORG_RE.test(o.id));
+      if (!orgList.length && i < 2) await new Promise((r) => setTimeout(r, 1200));
+    }
+    if (!orgList.length) {
+      const cur = await exec('gcloud', ['config', 'get-value', 'project'], { timeout: 20000 });
+      const proj = cur.ok ? cur.out.split(/\r?\n/).pop().trim() : '';
+      if (/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(proj)) {
+        const anc = await exec('gcloud', ['projects', 'get-ancestors', proj, '--format=json'], { timeout: 40000 });
+        const org = parse(anc).find((x) => x.type === 'organization' && ORG_RE.test(String(x.id)));
+        if (org) {
+          const d = await exec('gcloud', ['organizations', 'describe', org.id, '--format=value(displayName)'], { timeout: 30000 });
+          orgList = [{ id: String(org.id), name: (d.ok && d.out.trim()) || `organization ${org.id}` }];
+        }
+      }
+    }
+    const curP = await exec('gcloud', ['config', 'get-value', 'project'], { timeout: 20000 });
+    const currentProject = curP.ok ? curP.out.split(/\r?\n/).pop().trim() : '';
+    let [billing, projects] = await Promise.all([
       exec('gcloud', ['billing', 'accounts', 'list', '--filter=open=true', '--format=json'], { timeout: 40000 }),
       exec('gcloud', ['projects', 'list', '--filter=labels.managed-by=nativity-studio', '--format=json'], { timeout: 60000 }),
     ]);
-    const parse = (r) => { try { return JSON.parse(r.out || '[]'); } catch { return []; } };
+    if (!parse(billing).length) { await new Promise((r) => setTimeout(r, 1200)); billing = await exec('gcloud', ['billing', 'accounts', 'list', '--filter=open=true', '--format=json'], { timeout: 40000 }); }
     return {
-      signedIn: true, account,
-      orgs: parse(orgs).map((o) => ({ id: String(o.name || '').replace('organizations/', ''), name: o.displayName || o.name })).filter((o) => ORG_RE.test(o.id)),
+      signedIn: true, account, currentProject,
+      orgs: orgList,
       billing: parse(billing).map((b) => ({ id: String(b.name || '').replace('billingAccounts/', ''), name: b.displayName || b.name })).filter((b) => BILLING_RE.test(b.id)),
       projects: parse(projects).map((p) => ({ id: p.projectId, app: (p.labels || {}).app || '', env: (p.labels || {}).environment || '' })),
       billingDenied: !billing.ok,
-      orgsDenied: !orgs.ok,
+      orgsDenied: !orgList.length && !!orgs && !orgs.ok,
     };
   }
 
@@ -167,5 +191,6 @@ exports.build = (ctx) => {
     return { architecture, steps, targets, warnings, blockers, prerequisites, summary: `${envs.length} project(s)${useFolders ? ', ' + (envs.length + 1) + ' folders' : ''}, ${envs.length * 3} service accounts` };
   }
 
-  return { discover, plan };
+  const wizard = require('./wizard').build(ctx, { APIS, DEPLOYER_ROLES, RUNTIME_ROLES, CICD_ROLES });
+  return { discover, plan, wizard };
 };

@@ -25,9 +25,10 @@ async function enableMode() {
   if (!live.length) return connectCloudDialog();
   const cur = (state.proj || PROJ_DEFAULT).cloud;
   try { await saveProject({ enabled: true, cloud: live.some((c) => c.id === cur) ? cur : live[0].id }); } catch { return; }
+  renderHome();
+  if (live.length === 1 && live[0].id === 'gcp') { status('Cloud Native Development enabled. Set up your Google Cloud environments with the wizard.'); return openGcpWizard(); }
   status('Cloud Native Development enabled. Review the architecture, then Provision.');
   openLanding();
-  renderHome();
 }
 
 function connectCloudDialog() {
@@ -75,7 +76,7 @@ const sanitizeApp = (n) => (String(n).toLowerCase().replace(/[^a-z0-9-]/g, '-').
 
 function specNow() {
   const clouds = {};
-  for (const [id, c] of Object.entries(LD.clouds)) clouds[id] = { enabled: c.enabled, region: c.region, options: c.options };
+  for (const [id, c] of Object.entries(LD.clouds)) if (id !== 'gcp') clouds[id] = { enabled: c.enabled, region: c.region, options: c.options }; // Google Cloud has its own wizard
   return { app: LD.app, envs: LD.envs, clouds };
 }
 
@@ -83,6 +84,7 @@ function schedulePlan(ms) {
   clearTimeout(LD.timer);
   LD.timer = setTimeout(async () => {
     if (LD.run && !LD.run.done) return;
+    if (!Object.entries(LD.clouds).some(([id, c]) => id !== 'gcp' && c.enabled)) { LD.plan = null; LD.planning = false; LD.planErr = Object.keys(LD.clouds).includes('gcp') ? 'Google Cloud is set up with its own wizard. Connect another cloud to provision it here.' : 'Select a cloud to plan.'; drawLanding(); return; }
     const my = ++LD.seq;
     LD.planning = true; LD.planErr = '';
     drawLanding();
@@ -212,7 +214,20 @@ function cloudOptions(c) {
   return wrap;
 }
 
+/** Google Cloud: organisation landing zone + applications, in its own wizard. */
+function gcpCard(c) {
+  const land = (state.proj && state.proj.landing && state.proj.landing.gcp) || null;
+  const apps = Object.entries((state.proj && state.proj.apps) || {});
+  return h('div', { class: 'card cloudpanel', style: `--cc:${c.color || '#4285f4'}` },
+    h('div', { class: 'cardh' }, h('b', { text: 'Google Cloud' }), h('span', { class: 'spacer' }), h('button', { class: 'primary', text: land ? 'Open the set-up wizard' : 'Start the set-up wizard', onclick: () => openGcpWizard() })),
+    h('p', { class: 'summary', text: 'In Google Cloud an environment is a folder. The wizard builds one landing zone for the whole organization: a Standard folder (dev, sit …) and a Compliant folder (uat, preprod, prod …), then creates a project with billing for each application in each environment folder, and associates your applications with them. It is done once per organization; later applications are just added.' }),
+    land ? h('div', { class: 'kv' }, 'Organization: ', h('b', { text: land.org ? land.org.name : 'none (projects side by side)' }), `   ·   ${Object.keys(land.envFolders || {}).length || ''} environment folders`) : h('div', { class: 'hint', text: 'Not set up yet for this project.' }),
+    apps.length ? h('table', { class: 'acc' }, ...apps.map(([n, a]) => h('tr', {}, h('td', { class: 'who', text: n }), h('td', { class: 't-dim', text: relOf(a.dir) || '.' }), h('td', { text: Object.entries((a.targets.gcp) || {}).map(([e, t]) => `${e}: ${t.scope}`).join('   ') })))) : null,
+    apps.length ? h('div', { class: 'row' }, h('button', { text: 'Associate more applications…', onclick: () => openGcpWizard({ startAt: 3 }) })) : null);
+}
+
 function cloudPanel(c) {
+  if (c.id === 'gcp') return gcpCard(c);
   const st = LD.clouds[c.id];
   const on = h('input', { type: 'checkbox', checked: st.enabled });
   on.onchange = () => { st.enabled = on.checked; drawLanding(); schedulePlan(120); };
@@ -238,7 +253,7 @@ function cloudPanel(c) {
 
 function stepList(pc) {
   const byEnv = new Map();
-  for (const s of pc.steps) { const k = s.env || '(shared)'; if (!byEnv.has(k)) byEnv.set(k, []); byEnv.get(k).push(s); }
+  for (const s of pc.steps) { const k = (s.group === 'folders' ? 'folders · ' : s.group && s.group.startsWith('app:') ? `${s.group.slice(4)} · ` : s.group === 'shared' ? 'shared project · ' : '') + (s.env || (s.group ? '' : '(shared)') || '(organization)'); if (!byEnv.has(k)) byEnv.set(k, []); byEnv.get(k).push(s); }
   return h('details', { class: 'steps' }, h('summary', { text: `Show every step and command (${pc.steps.length})` }),
     ...[...byEnv.entries()].map(([env, list]) => h('div', { class: 'envsteps' }, h('div', { class: 'envtag', text: env }),
       ...list.map((s) => { const k = `${pc.id}|${s.id}`; const ss = (LD.ss || {})[k] || { status: 'pending', icon: '○', message: '' }; return h('div', { class: 'pstep', 'data-key': k }, h('span', { class: `st ${ss.status}`, text: ss.icon }), h('div', { class: 'sbody' }, h('div', { class: 'stitle', text: s.title }), h('code', { text: s.file ? `write ${s.file}` : s.display }), h('div', { class: 'smsg', text: ss.message }))); }))));
@@ -365,4 +380,12 @@ cns.on('prov:event', (ev) => {
     const bad = r.failed || r.error;
     status(bad ? 'Provisioning finished with problems. See the failed steps.' : 'Environments provisioned. Use the environment switcher to work in any of them.', !!bad);
   } else if (ev.type === 'note') status(ev.message, true);
+});
+
+/* the application you are working in follows the file you have open */
+CNS.on('tab-activated', (tab) => {
+  if (!tab || tab.kind !== 'file' || !state.proj || !state.proj.enabled) return;
+  let best = null;
+  for (const [n, a] of Object.entries(state.proj.apps || {})) if (a.dir && normPath(tab.path).startsWith(normPath(a.dir) + BS) && (!best || a.dir.length > best[1].dir.length)) best = [n, a];
+  if (best && best[0] !== state.proj.app) saveProject({ app: best[0] }).then(() => status(`Application: ${best[0]}`)).catch(() => {});
 });

@@ -12,7 +12,7 @@ button.primary { background: var(--accent); color: #0e0f0c; border-color: var(--
 button.subtle { background: transparent; color: var(--dim); }
 button.wide { display: block; width: 100%; margin: 4px 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 input, select, textarea { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; margin: 3px 0 8px; }
-input[type=checkbox] { width: auto; margin: 0; }
+input[type=checkbox], input[type=radio] { width: auto; margin: 0; flex: none; }
 textarea { font-family: var(--mono); resize: vertical; }
 label { display: block; color: var(--dim); font-size: 11px; margin-top: 6px; text-transform: uppercase; letter-spacing: .04em; }
 label.inline { display: flex; gap: 6px; align-items: center; text-transform: none; font-size: 12px; color: var(--fg); margin: 8px 0; }

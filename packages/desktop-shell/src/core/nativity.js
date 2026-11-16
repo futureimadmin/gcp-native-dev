@@ -25,7 +25,7 @@ This folder is created by **Nativity Studio** (the IDE) in every project you ope
 
 | File | What it is | Commit it? |
 |------|------------|------------|
-| \`project.json\` | Cloud Native binding: which cloud this project uses, its environments (dev, test, prod ... your names) and where each one lives (project IDs, resource groups, stack names, namespaces). **No secrets.** | **Yes**: teammates open the project already connected |
+| \`project.json\` | Cloud Native binding: which cloud this project uses, its environments (dev, test, prod ... your names), its applications, and where each one lives (project IDs, resource groups, stack names, namespaces). **No secrets.** | **Yes**: teammates open the project already connected |
 | \`workspace.json\` | Your personal session: open files, the build you last selected, favourite build goals, advisor tips you switched off | No |
 | \`logs/\` | A log of every environment provisioning run: what was created, when, and what failed | No |
 | \`.gitignore\` | Keeps the personal parts above out of Git | Yes |

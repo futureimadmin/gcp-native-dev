@@ -17,9 +17,10 @@ const GROUP_RE = /^[A-Za-z0-9._()-]{1,90}$/;
 const SA_RE = /^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$/;
 const CALLABLE = new Set(['status', 'login', 'logout', 'scopes', 'setScope', 'inventory', 'consoleUrl', 'resources', 'resourceInfo', 'resourceLogs', 'objects', 'objectPreview']);
 
-const DEFAULTS = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '', envs: null, targets: {} };
+const DEFAULTS = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '', envs: null, targets: {}, app: '', apps: {}, landing: {} };
+const APP_NAME_RE = /^[a-z][a-z0-9-]{1,19}[a-z0-9]$/;
 const ENV_NAME_RE = /^[a-z][a-z0-9]{0,11}$/;
-const TARGET_KEYS = ['scope', 'group', 'impersonate', 'roleArn', 'stack', 'namespace', 'region', 'folder', 'provisionedAt'];
+const TARGET_KEYS = ['scope', 'group', 'impersonate', 'roleArn', 'stack', 'namespace', 'region', 'folder', 'tier', 'provisionedAt', 'mode'];
 const envNames = (p) => (p.envs && p.envs.length ? p.envs.map((e) => e.name) : ENVS);
 
 /** Environments chosen by the user: [{name, protected}] (or null = the classic dev / sit / uat / prod). */
@@ -31,7 +32,7 @@ function cleanEnvList(v) {
     const name = String((e && e.name) || '').trim().toLowerCase();
     if (!ENV_NAME_RE.test(name) || seen.has(name)) throw new Error(`Invalid or repeated environment name "${name}".`);
     seen.add(name);
-    return { name, protected: !!(e && e.protected) || name === 'prod' };
+    return { name, protected: !!(e && e.protected) || name === 'prod', ...(e && ['standard', 'compliant'].includes(e.tier) ? { tier: e.tier } : {}) };
   });
 }
 
@@ -49,6 +50,36 @@ function cleanTargets(v) {
   }
   return out;
 }
+
+/** Applications of a workspace and where each one lives: { orders: { dir, targets: { gcp: { dev: { scope, ... } } } } } */
+function cleanApps(v) {
+  const out = {};
+  for (const [name, a] of Object.entries(v || {}).slice(0, 60)) {
+    if (!APP_NAME_RE.test(name) || !a || typeof a !== 'object') continue;
+    out[name] = { dir: typeof a.dir === 'string' && a.dir.length < 400 && !/[\r\n]/.test(a.dir) ? a.dir : '', targets: cleanTargets(a.targets) };
+  }
+  return out;
+}
+
+/** The organisation-level landing zone a cloud was set up with (folders, billing): shared by every application. No secrets. */
+function cleanLanding(v) {
+  const out = {};
+  const s = (x, n = 120) => (typeof x === 'string' && x.length <= n && !/[\r\n]/.test(x) ? x : '');
+  for (const [cloud, l] of Object.entries(v || {})) {
+    if (!/^[a-z0-9]{2,12}$/.test(cloud) || !l || typeof l !== 'object') continue;
+    const tiers = {};
+    for (const t of ['standard', 'compliant']) if (l.tiers && l.tiers[t]) tiers[t] = { name: s(l.tiers[t].name, 60), id: s(l.tiers[t].id, 30) };
+    const envFolders = {};
+    for (const [e, id] of Object.entries(l.envFolders || {})) if (ENV_NAME_RE.test(e)) envFolders[e] = s(id, 30);
+    const envs = (Array.isArray(l.envs) ? l.envs : []).slice(0, 12).filter((e) => e && ENV_NAME_RE.test(String(e.name))).map((e) => ({ name: String(e.name), tier: ['standard', 'compliant'].includes(e.tier) ? e.tier : 'standard', protected: !!e.protected, regime: s(e.regime, 80) }));
+    out[cloud] = { org: l.org ? { id: s(l.org.id, 30), name: s(l.org.name) } : null, tiers, envFolders, envs, compliance: l.compliance ? { regime: s(l.compliance.regime, 80), location: s(l.compliance.location, 40) } : null, billing: { standard: s((l.billing || {}).standard, 40), compliant: s((l.billing || {}).compliant, 40) }, mode: s(l.mode, 12) };
+  }
+  return out;
+}
+
+/** Targets that apply right now: the active application's, or the workspace's own when no application is selected. */
+const isProtectedEnv = (p) => !!(p.envs && p.envs.find((e) => e.name === p.env && e.protected)) || p.env === 'prod';
+const activeTargets = (p) => (p.app && p.apps && p.apps[p.app] ? p.apps[p.app].targets : p.targets) || {};
 
 function register({ ipcMain, wrap, host, terminal, send }) {
   const prepared = new Map();
@@ -71,14 +102,19 @@ function register({ ipcMain, wrap, host, terminal, send }) {
     for (const k of Object.keys(DEFAULTS)) if (k in j) p[k] = j[k];
     try { p.envs = cleanEnvList(p.envs); } catch { p.envs = null; }
     p.targets = cleanTargets(p.targets);
+    p.apps = cleanApps(p.apps);
+    p.landing = cleanLanding(p.landing);
+    if (p.app && !p.apps[p.app]) p.app = '';
     if (!host.clouds.has(p.cloud)) p.cloud = host.clouds.has('gcp') ? 'gcp' : [...host.clouds.keys()][0] || 'gcp';
     const prov = host.clouds.get(p.cloud);
     if (!p.region && prov && prov.defaultRegion) p.region = prov.defaultRegion;
     if (!p.service) p.service = sanitizeName(path.basename(ws));
-    const t = p.targets[p.cloud] && p.targets[p.cloud][p.env];
+    const tg = activeTargets(p);
+    const t = tg[p.cloud] && tg[p.cloud][p.env];
     if (t) { if (t.scope) p.scope = t.scope; if (t.group) p.group = t.group; if (t.impersonate) p.impersonate = t.impersonate; }
+    if (p.app) p.service = p.app;
     if (!p.group) p.group = `${p.service}-${p.env}-rg`;
-    p.protectedEnv = !!(p.envs && p.envs.find((e) => e.name === p.env && e.protected)) || p.env === 'prod';
+    p.protectedEnv = isProtectedEnv(p);
     return p;
   }
 
@@ -89,8 +125,11 @@ function register({ ipcMain, wrap, host, terminal, send }) {
     const prov = provider(cloud);
     if (patch && 'envs' in patch) next.envs = cleanEnvList(patch.envs);
     if (patch && 'targets' in patch) next.targets = cleanTargets(patch.targets);
+    if (patch && 'apps' in patch) next.apps = cleanApps(patch.apps);
+    if (patch && 'landing' in patch) next.landing = cleanLanding(patch.landing);
     for (const [k, v] of Object.entries(patch || {})) {
-      if (!(k in DEFAULTS) || k === 'envs' || k === 'targets') continue;
+      if (!(k in DEFAULTS) || ['envs', 'targets', 'apps', 'landing'].includes(k)) continue;
+      if (k === 'app') { if (v && !next.apps[v]) throw new Error('Unknown application.'); next.app = v || ''; continue; }
       if (k === 'enabled') next.enabled = !!v;
       else if (k === 'cloud') next.cloud = cloud;
       else if (k === 'env') { if (!envNames(next).includes(v)) throw new Error('Unknown environment.'); next.env = v; }
@@ -107,14 +146,17 @@ function register({ ipcMain, wrap, host, terminal, send }) {
       if (!('impersonate' in patch)) next.impersonate = '';
     }
     // an environment can live in its own project / account / resource group: switching environment (or cloud) follows it
-    if (patch && (('env' in patch) || ('cloud' in patch))) {
-      const t = next.targets[next.cloud] && next.targets[next.cloud][next.env];
+    if (patch && (('env' in patch) || ('cloud' in patch) || ('app' in patch))) {
+      const tg = activeTargets(next);
+      const t = tg[next.cloud] && tg[next.cloud][next.env];
       if (t) {
         if (!('scope' in patch) && t.scope) next.scope = t.scope;
         if (!('group' in patch) && t.group) next.group = t.group;
         next.impersonate = 'impersonate' in patch ? next.impersonate : (t.impersonate || '');
       }
+      if (next.app) next.service = next.app;
     }
+    next.protectedEnv = isProtectedEnv(next);
     await persist(ws, next);
     return next;
   }
@@ -123,6 +165,30 @@ function register({ ipcMain, wrap, host, terminal, send }) {
     const { protectedEnv, ...disk } = next;
     await fs.promises.mkdir(path.dirname(projFile(ws)), { recursive: true });
     await fs.promises.writeFile(projFile(ws), `${JSON.stringify({ environments: envNames(disk), ...disk }, null, 2)}\n`, 'utf8');
+  }
+
+  /** After the GCP wizard: remember the landing zone and where every application's environments live; turn Cloud Native mode on. */
+  async function recordApps(ws, cloud, apps, envs, landing) {
+    const cur = await loadProj(ws);
+    const next = { ...cur };
+    const merged = { ...cur.apps };
+    for (const [name, a] of Object.entries(apps || {})) {
+      const old = merged[name] || { dir: '', targets: {} };
+      merged[name] = { dir: a.dir || old.dir, targets: { ...old.targets, [cloud]: { ...((old.targets || {})[cloud] || {}), ...(a.targets || {}) } } };
+    }
+    next.apps = cleanApps(merged);
+    if (envs) next.envs = cleanEnvList(envs);
+    if (landing) next.landing = cleanLanding({ ...cur.landing, [cloud]: landing });
+    next.enabled = true;
+    next.cloud = cloud;
+    if (!next.app || !next.apps[next.app]) next.app = Object.keys(apps || {})[0] || Object.keys(next.apps)[0] || '';
+    if (!envNames(next).includes(next.env)) next.env = envNames(next)[0];
+    const tg = activeTargets(next);
+    const t = tg[cloud] && tg[cloud][next.env];
+    if (t) { if (t.scope) next.scope = t.scope; if (t.group) next.group = t.group; next.impersonate = t.impersonate || ''; }
+    if (next.app) next.service = next.app;
+    await persist(ws, next);
+    return next;
   }
 
   const cloudHasTargets = (p) => !!(p.targets && p.targets[p.cloud] && Object.keys(p.targets[p.cloud]).length);
@@ -239,7 +305,7 @@ function register({ ipcMain, wrap, host, terminal, send }) {
     return { id: terminal.start(e.command, e.cwd), title: e.title };
   }));
 
-  return { loadProj, saveProj, recordTargets };
+  return { loadProj, saveProj, recordTargets, recordApps };
 }
 
 module.exports = { register, ENVS, NAME_RE };

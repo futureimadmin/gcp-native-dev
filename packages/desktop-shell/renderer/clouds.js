@@ -2,7 +2,7 @@
 'use strict';
 
 const ENVS = ['dev', 'sit', 'uat', 'prod'];
-const PROJ_DEFAULT = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '', envs: null, targets: {} };
+const PROJ_DEFAULT = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '', envs: null, targets: {}, app: '', apps: {}, landing: {} };
 
 const cloudMeta = (id) => state.clouds.find((c) => c.id === id) || { id, name: id, short: id, scopeLabel: 'Scope', regions: [] };
 const cnOn = () => !!(state.workspace && state.proj && state.proj.enabled);
@@ -57,7 +57,7 @@ async function saveProject(patch) {
 function updateRootBadge() {
   const p = state.proj;
   const on = cnOn();
-  document.querySelectorAll('.root-badge').forEach((b) => (b.textContent = on ? `☁ ${boundCloud().short} · ${scopeShort(p.scope) || 'no scope'} · ${p.env}` : ''));
+  document.querySelectorAll('.root-badge').forEach((b) => (b.textContent = on ? `☁ ${boundCloud().short}${p.app ? ` · ${p.app}` : ''} · ${scopeShort(p.scope) || 'no scope'} · ${p.env}` : ''));
 }
 
 /** Everything that changes with mode, project, env, or sign-in. */
@@ -234,6 +234,8 @@ function bindingPanel() {
   const c = boundCloud();
   const cloudSel = h('select', { onchange: (e) => saveProject({ cloud: e.target.value }).then(() => { const id = e.target.value; if (cloudSignedIn(id) && !state.proj.scope && (state.cloudStatus[id] || {}).scope) saveProject({ scope: state.cloudStatus[id].scope }).catch(() => {}); }).catch(() => {}) },
     state.clouds.map((x) => h('option', { value: x.id, text: x.name, selected: x.id === p.cloud })));
+  const appKeys = Object.keys(p.apps || {});
+  const appSel = appKeys.length ? h('select', { onchange: (e) => saveProject({ app: e.target.value }).then(() => loadInventory(state.proj.cloud)).catch(() => {}) }, appKeys.map((n) => h('option', { value: n, text: n, selected: n === p.app }))) : null;
   const envSel = h('select', { onchange: (e) => switchEnv(e.target.value) }, envList().map((e) => h('option', { value: e, text: e, selected: e === p.env })));
   const regionSel = c.regions && c.regions.length > 1
     ? h('select', { onchange: (e) => saveProject({ region: e.target.value }).catch(() => {}) }, c.regions.map((r) => h('option', { value: r, text: r, selected: r === p.region })))
@@ -248,6 +250,7 @@ function bindingPanel() {
     h('label', { text: 'Cloud' }), cloudSel,
     h('label', { text: c.scopeLabel }),
     h('button', { class: 'wide', text: p.scope ? `Change ${c.scopeLabel.toLowerCase()} (${scopeShort(p.scope)})…` : `Select ${c.scopeLabel.toLowerCase()}…`, onclick: () => chooseScope(p.cloud) }),
+    appSel ? h('label', { text: 'Application' }) : null, appSel,
     h('label', { text: 'Environment' }), envSel,
     regionSel ? h('label', { text: 'Region' }) : null, regionSel,
     group ? h('label', { text: 'Resource group' }) : null, group,
@@ -255,7 +258,7 @@ function bindingPanel() {
     h('label', { text: 'Actions' }),
     h('div', { class: 'actgrid' },
       act('Run CI/CD', runPipeline), act('Deploy', deployNow), act('Create resource…', createResource),
-      act('Architecture & Provision…', openLanding, false), act('Generate pipeline', generatePipeline, false), act('Bootstrap (Terraform)', bootstrapDialog, false), act('Open console', openConsole)),
+      act(c.id === 'gcp' ? 'GCP set-up wizard…' : 'Architecture & Provision…', c.id === 'gcp' ? () => openGcpWizard() : openLanding, false), act('Generate pipeline', generatePipeline, false), act('Bootstrap (Terraform)', bootstrapDialog, false), act('Open console', openConsole)),
     h('button', { class: 'wide subtle', text: 'Disable Cloud Native Development', onclick: disableMode }));
 }
 
@@ -417,6 +420,8 @@ function projectMenuItems() {
     const s = state.cloudStatus[p.cloud] || {};
     items.push('-',
       { label: 'Architecture & Provision Environments…', run: openLanding },
+      { label: 'Google Cloud set-up wizard…', run: () => openGcpWizard() },
+      { label: 'Associate applications with Google Cloud projects…', run: () => openGcpWizard({ startAt: 3 }) },
       { label: 'Run CI/CD Pipeline', run: runPipeline, disabled: !ready },
       { label: 'Deploy', run: deployNow, disabled: !ready },
       { label: 'Create Cloud Resource…', run: createResource, disabled: !ready },

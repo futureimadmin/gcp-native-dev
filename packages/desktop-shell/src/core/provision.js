@@ -87,8 +87,37 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
     const token = crypto.randomUUID();
     plans.set(token, { ws, app, envs, clouds: out });
     setTimeout(() => plans.delete(token), 30 * 60 * 1000).unref();
-    const view = out.map((c) => ({ ...c, steps: c.steps.map(({ id, env, title, display, checkDisplay, optional, writeFile }) => ({ id, env: env || '', title, display, checkDisplay: checkDisplay || '', optional: !!optional, file: writeFile ? writeFile.path : '' })) }));
+    const view = out.map((c) => ({ ...c, steps: c.steps.map(({ id, env, group, title, display, checkDisplay, optional, writeFile }) => ({ id, env: env || '', group: group || '', title, display, checkDisplay: checkDisplay || '', optional: !!optional, file: writeFile ? writeFile.path : '' })) }));
     return { token, app, envs, protectedEnvs, clouds: view, totalSteps: out.reduce((n, c) => n + c.steps.length, 0) };
+  }));
+
+  /* ---------- wizards (a cloud's guided set-up: GCP organisation / folders / applications) ---------- */
+
+  const WIZARD_CALLS = new Set(['tree', 'projects', 'regimes']);
+
+  ipcMain.handle('prov:wizard', wrap(async (_ws, cloudId, method, args) => {
+    const p = prov(cloudId);
+    if (!p.provision.wizard || !WIZARD_CALLS.has(method) || typeof p.provision.wizard[method] !== 'function') throw new Error('Not available.');
+    return p.provision.wizard[method](ctxFor(p), ...(Array.isArray(args) ? args : []));
+  }));
+
+  ipcMain.handle('prov:wizardPlan', wrap(async (ws, cloudId, spec) => {
+    const p = prov(cloudId);
+    if (!p.provision.wizard) throw new Error(`${p.name} has no set-up wizard.`);
+    const disc = await discover(cloudId, false);
+    if (!disc || disc.signedIn === false) throw new Error(`${p.name} is not connected. Sign in first.`);
+    const plan = await p.provision.wizard.plan(spec, disc, ws);
+    for (const s of plan.steps) {
+      if (!s.id || !s.cmd || !Array.isArray(s.args)) throw new Error(`${p.name} produced an invalid step.`);
+      s.display = commandLine(s.cmd, s.args);
+      if (s.check) s.checkDisplay = commandLine(s.check.cmd, s.check.args);
+    }
+    const token = crypto.randomUUID();
+    const cloud = { id: cloudId, name: p.name, short: p.short || p.name, color: p.color, region: plan.region, ...plan };
+    plans.set(token, { ws, app: '(wizard)', envs: plan.envs, clouds: [cloud] });
+    setTimeout(() => plans.delete(token), 30 * 60 * 1000).unref();
+    const view = { ...cloud, steps: plan.steps.map(({ id, env, group, title, display, checkDisplay, optional, writeFile }) => ({ id, env: env || '', group: group || '', title, display, checkDisplay: checkDisplay || '', optional: !!optional, file: writeFile ? writeFile.path : '' })) };
+    return { token, envs: plan.envs, protectedEnvs: plan.envs.filter((e) => e.protected).map((e) => e.name), clouds: [view], totalSteps: plan.steps.length };
   }));
 
   /* ---------- run ---------- */
@@ -112,7 +141,8 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
     const results = [];
     for (const cloud of plan.clouds) {
       const vars = {};
-      const envOk = new Map(plan.envs.map((e) => [e.name, true]));
+      const gk = (s) => `${s.group || ''}|${s.env || ''}`; // failures are tracked per application + environment
+      const okMap = new Map();
       let stopped = false;
       emit({ type: 'cloud', cloud: cloud.id, status: 'running' });
       for (const step of cloud.steps) {
@@ -132,7 +162,8 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
           }
           if (step.check) {
             const c = await exec(step.check.cmd, step.check.args.map((a) => fill(a, vars)), { timeout: step.check.timeout || 60000, cwd: plan.ws });
-            const present = c.ok && (step.check.match ? new RegExp(step.check.match, 'i').test(c.out) : step.check.expect === 'ok' || !!c.out.trim());
+            const want = step.check.matchVar ? `^${String(vars[step.check.matchVar] || '__none__').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` : step.check.match;
+            const present = c.ok && (want ? new RegExp(want, 'i').test(c.out.trim()) : step.check.expect === 'ok' || !!c.out.trim());
             if (present) {
               if (step.capture) { const v = c.out.split(/\r?\n/).filter(Boolean).pop().trim(); if (VALUE_RE.test(v)) vars[step.capture] = v; }
               mark('skipped', 'Already exists');
@@ -160,20 +191,36 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
         } catch (e) {
           if (step.optional) { mark('warn', e.message); continue; }
           mark('failed', e.message);
-          if (step.env) envOk.set(step.env, false);
-          // steps for other environments are independent of this failure, but infrastructure-wide steps are not
+          okMap.set(gk(step), false);
+          // steps for other environments / applications are independent of this failure, but infrastructure-wide steps are not
           if (!step.env) stopped = true;
-          else for (const later of cloud.steps) if (later.env === step.env && later !== step) later.skipBecause = step.id;
+          else for (const later of cloud.steps) if (later.env === step.env && later !== step && (step.group === 'folders' || (later.group || '') === (step.group || ''))) later.skipBecause = step.id;
         }
       }
-      const doneEnvs = [];
-      for (const [env, ok] of envOk) if (ok && !stopped && !state.cancelled) doneEnvs.push(env);
-      if (doneEnvs.length && cloud.targets) {
+      const good = (key) => okMap.get(key) !== false && !stopped && !state.cancelled;
+      const doneEnvs = plan.envs.map((e) => e.name).filter((env) => good(`|${env}`));
+      const failedEnvs = [...new Set([...okMap].filter(([, ok]) => !ok).map(([k]) => k.split('|')[1]).filter(Boolean))];
+      let recordedApps = [];
+      if (cloud.record) { // wizard plans: many applications, each with its own project per environment
+        const patch = {};
+        for (const [name, a] of Object.entries(cloud.record.apps || {})) {
+          const targets = {};
+          for (const [env, t] of Object.entries(a.targets || {})) {
+            const { needs, ...rest } = t;
+            if ((needs || []).every(good)) targets[env] = { ...rest, provisionedAt: new Date().toISOString() };
+          }
+          if (Object.keys(targets).length) patch[name] = { dir: a.dir, targets };
+        }
+        recordedApps = Object.keys(patch);
+        if (recordedApps.length) {
+          try { await cloudflow.recordApps(plan.ws, cloud.id, patch, plan.envs, cloud.record.landing); } catch (e) { emit({ type: 'note', message: `Could not save the result to .nativity/project.json: ${e.message}` }); }
+        }
+      } else if (doneEnvs.length && cloud.targets) {
         const patch = {};
         for (const env of doneEnvs) if (cloud.targets[env]) patch[env] = { ...cloud.targets[env], provisionedAt: new Date().toISOString() };
-        try { await cloudflow.recordTargets(plan.ws, cloud.id, patch, plan.envs, plan.app); } catch (e) { emit({ type: 'note', message: `Could not save the result to .cnd/project.json: ${e.message}` }); }
+        try { await cloudflow.recordTargets(plan.ws, cloud.id, patch, plan.envs, plan.app); } catch (e) { emit({ type: 'note', message: `Could not save the result to .nativity/project.json: ${e.message}` }); }
       }
-      results.push({ cloud: cloud.id, envs: doneEnvs, failed: [...envOk].filter(([, ok]) => !ok).map(([e]) => e), stopped });
+      results.push({ cloud: cloud.id, envs: doneEnvs, failed: failedEnvs, stopped, apps: recordedApps });
       emit({ type: 'cloud', cloud: cloud.id, status: results[results.length - 1].failed.length || stopped ? 'failed' : 'ok' });
     }
     discoveryCache.clear(); // what exists has changed
