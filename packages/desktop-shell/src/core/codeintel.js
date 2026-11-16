@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const JavaParse = require('../../renderer/javaparse.js');
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'target', 'build', 'dist', 'out', '.gradle', '.idea', '.vscode', '.venv', '__pycache__', '.angular', '.next', 'bin', 'obj', '.cnd']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'target', 'build', 'dist', 'out', '.gradle', '.idea', '.vscode', '.venv', '__pycache__', '.angular', '.next', 'bin', 'obj', '.cnd', '.nativity']);
 const MAX_FILE = 2 * 1024 * 1024;
 
 function walk(root, visit, limit = 60000) {

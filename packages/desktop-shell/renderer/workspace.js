@@ -17,20 +17,52 @@ async function openFolder(dir) {
   $('term-prompt').textContent = promptStr();
   await tryInv('app:setWorkspace', dir);
   await tryInv('app:addRecent', dir);
+  // every project gets a .nativity folder (cloud binding, personal session, logs): see src/core/nativity.js
+  const ns = await tryInv('nativity:ensure', dir);
+  state.wsState = ns.ok && ns.data ? ns.data.state : { tabs: [], active: '', build: {}, advisor: {} };
+  state.wsNew = !!(ns.ok && ns.data && ns.data.created);
   await loadProject();
   await refreshTree();
   tryInv('app:refreshMenu');
   detectBuildEnv();
   showView('explorer');
   showHome();
-  status(`Opened ${baseName(dir)}`);
+  status(`Opened ${baseName(dir)}${state.wsNew ? ' (created the .nativity folder)' : ''}`);
+  restoreSession();
 }
+
+/** Reopens the files that were open last time (from .nativity/workspace.json). */
+async function restoreSession() {
+  const s = state.wsState;
+  if (!s || !Array.isArray(s.tabs) || !s.tabs.length) return;
+  state.restoring = true;
+  try {
+    for (const rel of s.tabs) { const f = joinPath(state.workspace, String(rel).split('/').join(BS)); if (await inv('fs:exists', f).catch(() => false)) await openFile(f); }
+    const act = state.tabs.find((t) => t.kind === 'file' && normPath(t.path) === normPath(joinPath(state.workspace, String(s.active || '').split('/').join(BS))));
+    if (act) activate(act);
+  } finally { state.restoring = false; }
+}
+
+let sessionTimer = null;
+function saveSession() {
+  if (!state.workspace || state.restoring) return;
+  clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => {
+    const rel = (p) => relOf(p).split(BS).join('/');
+    const files = state.tabs.filter((t) => t.kind === 'file' && normPath(t.path).startsWith(normPath(state.workspace) + BS));
+    const patch = { tabs: files.map((t) => rel(t.path)), active: state.active && state.active.kind === 'file' ? rel(state.active.path) : '' };
+    state.wsState = { ...(state.wsState || {}), ...patch };
+    tryInv('nativity:set', state.workspace, patch);
+  }, 900);
+}
+CNS.on('tab-activated', saveSession);
 
 async function closeFolder() {
   if (!state.workspace) return;
   if (state.tabs.some((t) => t.kind === 'file' && t.model.getValue() !== t.saved) && !(await confirmBox('Close folder?', 'Unsaved changes will be lost.'))) return;
   closeAllFileTabs();
   state.workspace = null;
+  state.wsState = null;
   state.cwd = null;
   state.proj = null;
   $('workspace-name').textContent = '';

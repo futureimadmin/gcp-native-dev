@@ -7,8 +7,9 @@ CNS.plugin('cns.build-tools', (api) => {
   const { h } = api.ui;
   const B = { projects: [], sel: '', info: null, tools: {}, optOn: new Set(), profiles: new Set(), module: '', alsoMake: false, wrapper: true, custom: '', run: null, last: null, ui: null, scanning: false, depFilter: '', open: {}, timer: null };
   const call = (ch, ...a) => api.invoke(ch, state.workspace, ...a);
-  const cfg = () => state.settings.build || {};
-  const saveCfg = async (patch) => { state.settings.build = { ...cfg(), ...patch }; await tryInv('settings:set', 'build', state.settings.build); };
+  // build preferences (selected project, options, favourites, history) belong to the project: .nativity/workspace.json
+  const cfg = () => ((state.wsState && state.wsState.build && Object.keys(state.wsState.build).length) ? state.wsState.build : state.settings.build) || {};
+  const saveCfg = async (patch) => { const next = { ...cfg(), ...patch }; state.wsState = { ...(state.wsState || {}), build: next }; await tryInv('nativity:set', state.workspace, { build: next }); };
   const cur = () => B.projects.find((p) => p.id === B.sel) || null;
   const LOGO_OF = (tool, info) => (tool === 'npm' ? (info && info.pm) || 'npm' : tool === 'python' ? (info && info.manager) || 'pip' : tool);
 

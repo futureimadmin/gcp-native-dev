@@ -273,7 +273,7 @@ function applyModeButtonsOnly() {
 /* ------------------------------ enable / disable / environment ------------------------------ */
 
 async function disableMode() {
-  if (!(await confirmBox('Turn off Cloud Native Development for this project?', 'Nothing in the cloud is changed. Your .cnd/project.json is kept.'))) return;
+  if (!(await confirmBox('Turn off Cloud Native Development for this project?', 'Nothing in the cloud is changed. Your .nativity/project.json is kept.'))) return;
   try { await saveProject({ enabled: false }); } catch { return; }
   status('Cloud Native Development disabled.');
   renderHome();

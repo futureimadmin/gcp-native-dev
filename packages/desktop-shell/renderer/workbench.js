@@ -106,6 +106,7 @@ function activate(tab) {
   markTree();
   if (typeof renderCrumbs === 'function') renderCrumbs(tab);
   if (typeof linkExplorerTo === 'function') linkExplorerTo(tab);
+  CNS.emit('tab-activated', tab);
 }
 
 function showHome() {

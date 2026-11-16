@@ -11,7 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { exec } = require('./util');
 
-const SKIP = new Set(['node_modules', '.git', 'target', 'build', 'dist', 'out', '.gradle', '.idea', '.vscode', '.venv', '.cnd', 'bin', 'obj', '__pycache__']);
+const SKIP = new Set(['node_modules', '.git', 'target', 'build', 'dist', 'out', '.gradle', '.idea', '.vscode', '.venv', '.cnd', '.nativity', 'bin', 'obj', '__pycache__']);
 const hash = (s) => crypto.createHash('sha1').update(String(s).toLowerCase()).digest('hex').slice(0, 12);
 const fwd = (p) => p.split(path.sep).join('/');
 const inside = (root, f) => { const r = path.resolve(root).toLowerCase(); const x = path.resolve(f).toLowerCase(); return x === r || x.startsWith(r + path.sep); };

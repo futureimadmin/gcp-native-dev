@@ -89,7 +89,7 @@ verbatim, requires a click (and typing `prod` for production), and runs exactly 
 token. The UI can never submit arbitrary command text. Validate every user-supplied value and build commands with
 `ctx.commandLine`, which rejects unsafe characters.
 
-`proj` is the project binding from `.cnd/project.json`: `{cloud, scope, env, region, service, repo, group, impersonate}`.
+`proj` is the project binding from `.nativity/project.json`: `{cloud, scope, env, region, service, repo, group, impersonate}`.
 
 ## Renderer API (`CNS.plugin(id, api => ...)`)
 

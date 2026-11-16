@@ -30,6 +30,8 @@ function register({ ipcMain, wrap, host, store, secrets, terminal, send }) {
 
   // Sign-in checks can take seconds (they start Claude Code / gcloud), so remember the answer for a minute; "Re-check" asks for a fresh one.
   const statusCache = new Map();
+  const modelCache = new Map(); // provider id -> { at, extra: [ids the account can use that the built-in list lacks] }
+  const mergedModels = (p) => { const c = modelCache.get(p.id); const base = p.models || []; return c ? [...base, ...c.extra.filter((m) => !base.includes(m))] : base; };
   ipcMain.handle('ai:list', wrap(async (fresh) => {
     const api = await Promise.all([...host.ai.values()].map(async (p) => {
       let st = null;
@@ -43,7 +45,11 @@ function register({ ipcMain, wrap, host, store, secrets, terminal, send }) {
       id: p.id,
       name: p.name,
       kind: 'api',
-      models: p.models || [],
+      models: mergedModels(p),
+      modelInfo: { ...Object.fromEntries((mergedModels(p)).filter((m) => !(p.modelInfo || {})[m]).map((m) => [m, { note: 'Found on your account. Price tier not known.' }])), ...(p.modelInfo || {}) },
+      canListModels: typeof p.listModels === 'function',
+      modelsLoaded: modelCache.has(p.id),
+      tierNote: p.tierNote || '',
       model: store.get(`ai.${p.id}.model`, p.defaultModel || ''),
       needsKey: p.needsKey !== false,
       keySet,
@@ -62,6 +68,21 @@ function register({ ipcMain, wrap, host, store, secrets, terminal, send }) {
       id: a.id, name: a.name, kind: 'cli', cmd: a.cmd, installHint: a.installHint || '', installed: await isInstalled(a.cmd),
     })));
     return { api, cli, secureStorage: secrets.available() };
+  }));
+
+  // Ask the provider which models this key / sign-in can use, so new models appear without an app update (cached for an hour).
+  ipcMain.handle('ai:refreshModels', wrap(async (id) => {
+    const p = host.ai.get(id);
+    if (!p || typeof p.listModels !== 'function') return false;
+    const hit = modelCache.get(id);
+    if (hit && Date.now() - hit.at < 3600 * 1000) return true;
+    const key = p.needsKey === false ? '' : secrets.get(`ai.${id}.key`);
+    if (p.needsKey !== false && !key) return false;
+    try {
+      const ids = await p.listModels({ key });
+      modelCache.set(id, { at: Date.now(), extra: [...new Set(ids)].filter((m) => /^[\w.:/-]{2,100}$/.test(m)).sort().reverse() });
+    } catch { modelCache.set(id, { at: Date.now() - 3000 * 1000, extra: [] }); } // try again in ten minutes
+    return true;
   }));
 
   ipcMain.handle('ai:setKey', wrap(async (id, key) => {

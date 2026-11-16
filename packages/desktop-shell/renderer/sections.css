@@ -68,3 +68,28 @@ svg.logo { flex: none; vertical-align: middle; }
 .monaco-editor .git-gutter-add { border-left: 3px solid #2ea043; margin-left: 3px; width: 3px !important; }
 .monaco-editor .git-gutter-mod { border-left: 3px solid #4a9eff; margin-left: 3px; width: 3px !important; }
 .monaco-editor .git-gutter-del { margin-left: 3px; width: 6px !important; background: linear-gradient(to bottom right, transparent 50%, #d9534f 50%) top left / 6px 6px no-repeat; }
+
+/* AI model picker with price-tier colours */
+select.modelpick { min-width: 0; } .aiLegend { padding: 0 12px 4px; font-size: 11px; color: var(--dim); } .tierlegend { font-size: 11px; font-weight: 400; cursor: help; }
+select.modelpick option { background: #1b1d19; }
+
+/* command box: close button */
+#palette .phead { display: flex; align-items: center; } #palette .phead input { flex: 1; margin: 0; } #palette-x { background: transparent; border: none; color: var(--dim); padding: 6px 12px; font-size: 14px; cursor: pointer; border-bottom: 1px solid var(--line); height: 38px; } #palette-x:hover { color: var(--fg); background: var(--bg3); }
+
+/* Markdown: Edit / Preview / Split */
+#md-bar { position: absolute; top: 8px; right: 24px; z-index: 8; display: flex; gap: 2px; padding: 2px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.45); }
+#md-bar button { padding: 3px 10px; font-size: 12px; background: transparent; border: none; border-radius: 6px; color: var(--dim); cursor: pointer; } #md-bar button:hover { color: var(--fg); background: var(--bg3); } #md-bar button.on { background: var(--accent); color: #0e0f0c; font-weight: 700; }
+#md-preview { position: absolute; inset: 0; overflow: auto; background: var(--bg); padding: 52px 44px 70px; z-index: 4; outline: none; }
+#editor-wrap[data-md="split"] #editor { right: 50%; } #editor-wrap[data-md="split"] #md-preview { left: 50%; border-left: 1px solid var(--line); padding-top: 52px; }
+#editor-wrap[data-md="preview"] #editor { visibility: hidden; }
+.md-body { max-width: 900px; margin: 0 auto; font: 15px/1.65 "Segoe UI", system-ui, sans-serif; color: var(--fg); word-wrap: break-word; }
+.md-body h1, .md-body h2 { border-bottom: 1px solid var(--line); padding-bottom: .3em; } .md-body h1 { font-size: 2em; margin: 1.2em 0 .6em; } .md-body h2 { font-size: 1.5em; margin: 1.4em 0 .6em; } .md-body h3 { font-size: 1.25em; margin: 1.3em 0 .5em; } .md-body h4, .md-body h5, .md-body h6 { margin: 1.2em 0 .4em; } .md-body h1:first-child { margin-top: 0; }
+.md-body p, .md-body ul, .md-body ol, .md-body blockquote, .md-body table, .md-body pre { margin: 0 0 14px; }
+.md-body a.md-a { color: #6ab0f3; text-decoration: none; cursor: pointer; } .md-body a.md-a:hover { text-decoration: underline; }
+.md-body code.md-ic { background: #232620; border-radius: 4px; padding: .15em .4em; font: 13px Monospaced, "Courier New", monospace; }
+.md-body pre.md-pre { position: relative; background: #0b0c09; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow: auto; } .md-body pre code { font: 13px/1.5 Monospaced, "Courier New", monospace; background: none; padding: 0; white-space: pre; }
+.md-body .md-lang { position: absolute; top: 4px; right: 40px; font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; } .md-body .md-copy { position: absolute; top: 2px; right: 6px; background: transparent; border: none; color: var(--dim); cursor: pointer; opacity: 0; } .md-body pre:hover .md-copy { opacity: 1; }
+.md-body blockquote { border-left: 4px solid var(--accent); margin-left: 0; padding: 2px 16px; color: #b9bfb2; background: rgba(138,158,144,.07); border-radius: 0 6px 6px 0; }
+.md-body ul, .md-body ol { padding-left: 28px; } .md-body li { margin: 3px 0; } .md-body li.md-task { list-style: none; margin-left: -20px; } .md-body li.md-task input { margin-right: 8px; }
+.md-body .md-tablewrap { overflow: auto; margin-bottom: 14px; } .md-body table.md-table { border-collapse: collapse; margin: 0; } .md-body th, .md-body td { border: 1px solid var(--line); padding: 6px 12px; } .md-body th { background: var(--bg2); } .md-body tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+.md-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; } .md-body img { max-width: 100%; border-radius: 4px; } .md-body .md-img { display: inline-block; }

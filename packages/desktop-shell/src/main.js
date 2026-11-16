@@ -74,6 +74,7 @@ function boot() {
     getWorkspace: () => workspace,
   });
   host.loadAll();
+  require('./core/nativity').register({ ipcMain, wrap, getWorkspace: () => workspace });
   const flow = cloudflow.register({ ipcMain, wrap, host, terminal, send: sendToRenderer });
   require('./core/provision').register({ ipcMain, wrap, host, send: sendToRenderer, cloudflow: flow });
   projects.register({ ipcMain, wrap, host, send: sendToRenderer, store });
@@ -363,6 +364,15 @@ function registerCoreIpc() {
   }));
   ipcMain.handle('fs:trash', wrap(async (target) => { await shell.trashItem(target); })); // Recycle Bin: recoverable
   ipcMain.handle('fs:exists', wrap(async (p) => fs.existsSync(p)));
+  // images referenced by a Markdown file are shown from a data: URL (the page may not load files or remote pictures directly)
+  const IMG_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.ico': 'image/x-icon' };
+  ipcMain.handle('fs:readDataUrl', wrap(async (file) => {
+    const type = IMG_TYPES[path.extname(String(file)).toLowerCase()];
+    if (!type) throw new Error('Not a picture type the preview can show.');
+    const st = await fs.promises.stat(file);
+    if (st.size > 6 * 1024 * 1024) throw new Error('Picture is larger than 6 MB.');
+    return `data:${type};base64,${(await fs.promises.readFile(file)).toString('base64')}`;
+  }));
 
   ipcMain.handle('dialog:selectFolder', wrap(async (title) => {
     const r = await dialog.showOpenDialog(win, { title: title || 'Select folder', properties: ['openDirectory', 'createDirectory'] });

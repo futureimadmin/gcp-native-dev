@@ -35,7 +35,7 @@ const state = {
   settings: {},
   clouds: [], // provider metadata
   cloudStatus: {}, // id -> {installed, signedIn, identity, scope, detail, loading}
-  proj: null, // .cnd/project.json of the workspace
+  proj: null, // .nativity/project.json of the workspace
   tabs: [],
   active: null,
   plugins: [],

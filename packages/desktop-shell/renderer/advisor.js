@@ -72,7 +72,7 @@ const resolveSample = (v, ctx, hit) => (typeof v === 'function' ? v(ctx, hit) : 
 function analyzeText(text, lang, file) {
   if (!ADV_LANGS[lang] || text.length > 400000) return [];
   const ctx = makeCtx(text, lang, file);
-  const ignore = new Set(advCfg().ignore || []);
+  const ignore = new Set([...(advCfg().ignore || []), ...(((state.wsState || {}).advisor || {}).ignore || [])]);
   const out = [];
   const seen = new Set();
   for (const r of ADV_RULES) {
@@ -240,9 +240,9 @@ async function advShow(f) {
 }
 
 async function advIgnore(f) {
-  const list = [...new Set([...(advCfg().ignore || []), f.id])];
-  state.settings.advisor = { ...advCfg(), ignore: list };
-  await tryInv('settings:set', 'advisor.ignore', list);
+  const list = [...new Set([...((((state.wsState || {}).advisor) || {}).ignore || []), f.id])];
+  state.wsState = { ...(state.wsState || {}), advisor: { ...((state.wsState || {}).advisor || {}), ignore: list } };
+  await tryInv('nativity:set', state.workspace, { advisor: state.wsState.advisor }); // saved with the project (.nativity/workspace.json)
   status('That suggestion is switched off. Re-enable all of them in Settings > General.');
   advSchedule(50);
 }
@@ -538,7 +538,7 @@ function setupAdvisor() {
   CNS.command('advisor.analyzeProject', () => advAnalyzeProject(), 'Advisor: Analyze Whole Project (SOLID, modern Java, async)');
   CNS.command('advisor.panel', () => showPanel('suggestions'), 'View: Suggestions');
   CNS.command('advisor.toggle', async () => { const on = !advOn(); state.settings.advisor = { ...advCfg(), enabled: on }; await tryInv('settings:set', 'advisor.enabled', on); if (!on) { for (const t of state.tabs) if (t.kind === 'file') t.advDecos = t.model.deltaDecorations(t.advDecos || [], []); ADV.byModel.clear(); renderAdvice(); } else advSchedule(50); status(`Code advisor: ${on ? 'on' : 'off'}`); }, 'Advisor: Turn On / Off');
-  CNS.command('advisor.resetIgnored', async () => { state.settings.advisor = { ...advCfg(), ignore: [] }; await tryInv('settings:set', 'advisor.ignore', []); advSchedule(50); status('All suggestions are enabled again.'); }, 'Advisor: Re-enable All Suggestions');
+  CNS.command('advisor.resetIgnored', async () => { state.settings.advisor = { ...advCfg(), ignore: [] }; await tryInv('settings:set', 'advisor.ignore', []); state.wsState = { ...(state.wsState || {}), advisor: { ...((state.wsState || {}).advisor || {}), ignore: [] } }; await tryInv('nativity:set', state.workspace, { advisor: state.wsState.advisor }); advSchedule(50); status('All suggestions are enabled again.'); }, 'Advisor: Re-enable All Suggestions');
   CNS.command('lombok.add', addLombokDependency, 'Lombok: Add Dependency to Project');
   const A = (id, label, order, run, pre) => editor.addAction({ id, label, contextMenuGroupId: '9_cns', contextMenuOrder: order, precondition: pre, run });
   const J = "editorLangId == 'java'";

@@ -31,7 +31,7 @@ const PKIND = {
   docker: { label: 'Docker', short: 'DOCKER', color: '#3b9cf0', family: 'iac', tool: 'docker' },
 };
 
-const SKIP_DIRS = new Set(['node_modules', 'target', 'build', 'dist', 'out', 'bin', 'obj', '.git', '.idea', '.vscode', '.gradle', '.venv', 'venv', '__pycache__', '.cnd', '.next', 'coverage', '.mvn']);
+const SKIP_DIRS = new Set(['node_modules', 'target', 'build', 'dist', 'out', 'bin', 'obj', '.git', '.idea', '.vscode', '.gradle', '.venv', 'venv', '__pycache__', '.cnd', '.nativity', '.next', 'coverage', '.mvn']);
 const projCache = new Map(); // folder (lower case) -> kind | null
 const keyOf = (p) => String(p).split('/').join(BS).toLowerCase();
 

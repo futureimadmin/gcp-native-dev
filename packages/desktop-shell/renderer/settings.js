@@ -108,19 +108,18 @@ function aiPane(rerender) {
     const key = h('input', { type: 'password', placeholder: a.keySet ? '•••••••• (stored)' : 'API key', autocomplete: 'off' });
     const msg = h('div', { class: 'msg' });
     const base = a.configurableBaseUrl ? h('input', { value: a.baseUrl, placeholder: 'Base URL' }) : null;
-    const model = h('input', { value: a.model, placeholder: 'Model', list: `models-${a.id}` });
+    const model = modelPicker(a, a.model);
     if (a.auth === 'signin') {
       return h('div', { class: 'card' }, h('div', { class: 'cardh' }, h('span', { class: 'dot ' + (a.ready ? 'ok' : 'off') }), h('b', { text: a.name }), h('span', { class: 'chip', text: 'no API key' })),
         h('div', { class: 'hint', text: a.help }),
         h('div', { class: 'msg ' + (a.ready ? 'ok' : ''), text: a.statusText }),
-        h('label', { text: 'Model' }), h('input', { value: a.model, list: 'models-' + a.id, onchange: async (e) => { await tryInv('ai:setConfig', a.id, { model: e.target.value.trim() }); } }),
-        h('datalist', { id: 'models-' + a.id }, a.models.map((m) => h('option', { value: m }))),
+        h('label', {}, 'Model  ', tierLegend(a)), modelPicker(a, a.model, async (v) => { await tryInv('ai:setConfig', a.id, { model: v }); }),
+        a.tierNote ? h('div', { class: 'hint', text: a.tierNote }) : null,
         h('div', { class: 'row' }, a.canLogin && !a.ready ? h('button', { class: 'primary', text: 'Sign in', onclick: () => aiSignIn(a.id) }) : null, h('button', { text: 'Re-check', onclick: async () => { await loadAi(true); rerender(); } })));
     }
     return h('div', { class: 'card' }, h('div', { class: 'cardh' }, h('span', { class: `dot ${a.keySet || !a.needsKey ? 'ok' : 'off'}` }), h('b', { text: a.name })),
       h('div', { class: 'hint', text: a.help }),
-      h('datalist', { id: `models-${a.id}` }, a.models.map((m) => h('option', { value: m }))),
-      h('label', { text: 'Model' }), model,
+      h('label', {}, 'Model  ', tierLegend(a)), model, a.tierNote ? h('div', { class: 'hint', text: a.tierNote }) : null,
       base ? h('label', { text: 'Base URL' }) : null, base,
       h('label', { text: a.needsKey ? 'API key (stored encrypted by Windows)' : 'API key (optional)' }), key,
       h('div', { class: 'row' },

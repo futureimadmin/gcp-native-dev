@@ -105,6 +105,7 @@ function registerCommands() {
 
 function openPalette() {
   const root = $('palette');
+  if (!root.classList.contains('hidden')) { root.classList.add('hidden'); return; } // pressing Commands again closes it
   const input = $('palette-input');
   const list = $('palette-list');
   const all = [...CNS.commands.entries()].filter(([, c]) => c.title).map(([id, c]) => [c.title, id]).sort((a, b) => a[0].localeCompare(b[0]));
@@ -118,7 +119,7 @@ function openPalette() {
   input.focus();
   input.oninput = () => { const q = input.value.toLowerCase(); items = all.filter(([l]) => l.toLowerCase().includes(q)); sel = 0; draw(); };
   input.onkeydown = (e) => {
-    if (e.key === 'Escape') root.classList.add('hidden');
+    if (e.key === 'Escape') { root.classList.add('hidden'); if (editor) editor.focus(); }
     else if (e.key === 'ArrowDown') { sel = Math.min(sel + 1, items.length - 1); draw(); }
     else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); draw(); }
     else if (e.key === 'Enter' && items[sel]) pick(items[sel][1]);
@@ -164,6 +165,9 @@ async function main() {
     wireAi();
     wireToolbar();
     document.addEventListener('click', () => $('ctx').classList.add('hidden'));
+    // the command box closes with ✕, Esc, a click anywhere outside it, or by pressing Commands again
+    $('palette-x').onclick = () => { $('palette').classList.add('hidden'); if (editor) editor.focus(); };
+    document.addEventListener('mousedown', (e) => { const p = $('palette'); if (!p.classList.contains('hidden') && !p.contains(e.target) && !e.target.closest('#tb-palette')) p.classList.add('hidden'); }, true);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'F1') { e.preventDefault(); openHelp(); }
       if (e.key === 'Escape') { $('ctx').classList.add('hidden'); $('palette').classList.add('hidden'); }

@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { TOOLS, parseXml } = require('./tools');
 
-const SKIP = new Set(['node_modules', '.git', 'target', 'build', 'dist', 'out', 'bin', 'obj', '.gradle', '.idea', '.vscode', '.venv', 'venv', 'env', '__pycache__', '.cnd', '.next', 'coverage', 'vendor', 'site-packages', '.mvn', '.terraform', '.dart_tool']);
+const SKIP = new Set(['node_modules', '.git', 'target', 'build', 'dist', 'out', 'bin', 'obj', '.gradle', '.idea', '.vscode', '.venv', 'venv', 'env', '__pycache__', '.cnd', '.nativity', '.next', 'coverage', 'vendor', 'site-packages', '.mvn', '.terraform', '.dart_tool']);
 const SAFE_NAME = /^[\w.:@/\\-]{1,200}$/;
 const UA = 'NativityStudio/1.0 (+dependency search)';
 

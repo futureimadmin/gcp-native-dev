@@ -1,6 +1,6 @@
 /**
  * Cloud flow (provider-neutral).
- *  - per-project binding in <workspace>/.cnd/project.json (secret-free, shareable)
+ *  - per-project binding in <workspace>/.nativity/project.json (secret-free, shareable; older projects used .cnd/project.json)
  *  - generic "pipeline / deploy / resource" actions delegated to the active cloud provider
  *  - SAFETY: a provider only BUILDS a command. The UI shows it verbatim for confirmation and can run it only
  *    by one-time token via cloud:run; it can never submit arbitrary command text.
@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { sanitizeName } = require('./util');
+const nativity = require('./nativity');
 
 const ENVS = ['dev', 'sit', 'uat', 'prod'];
 const NAME_RE = /^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$/;
@@ -58,11 +59,13 @@ function register({ ipcMain, wrap, host, terminal, send }) {
     return p;
   };
 
-  const projFile = (ws) => path.join(ws, '.cnd', 'project.json');
+  const projFile = (ws) => nativity.projectFile(ws);
 
   async function loadProj(ws) {
     let j = {};
-    try { j = JSON.parse(await fs.promises.readFile(projFile(ws), 'utf8')); } catch { /* not enabled yet */ }
+    try { j = JSON.parse(await fs.promises.readFile(projFile(ws), 'utf8')); } catch {
+      try { j = JSON.parse(await fs.promises.readFile(nativity.legacyProjectFile(ws), 'utf8')); } catch { /* not enabled yet */ }
+    }
     if (j.projectId && !j.scope) j.scope = j.projectId; // v1 files
     const p = { ...DEFAULTS };
     for (const k of Object.keys(DEFAULTS)) if (k in j) p[k] = j[k];

@@ -104,7 +104,11 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
 
   async function runPlan(runId, plan) {
     const state = runs.get(runId);
-    const emit = (payload) => send('prov:event', { runId, ...payload });
+    const logLines = [`Provisioning run ${new Date().toISOString()}  app=${plan.app}  environments=${plan.envs.map((e) => e.name).join(',')}`];
+    const emit = (payload) => {
+      send('prov:event', { runId, ...payload });
+      if (payload.type === 'step' && payload.status !== 'running') logLines.push(`${new Date().toISOString()}  ${payload.cloud}  ${payload.step}  ${payload.status}${payload.message ? `  ${String(payload.message).replace(/\s+/g, ' ')}` : ''}`);
+    };
     const results = [];
     for (const cloud of plan.clouds) {
       const vars = {};
@@ -173,6 +177,7 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
       emit({ type: 'cloud', cloud: cloud.id, status: results[results.length - 1].failed.length || stopped ? 'failed' : 'ok' });
     }
     discoveryCache.clear(); // what exists has changed
+    require('./nativity').writeLog(plan.ws, `provision-${new Date().toISOString().replace(/[:.]/g, '-')}.log`, `${logLines.join('\n')}\n`);
     emit({ type: 'done', cancelled: !!state.cancelled, results });
     runs.delete(runId);
   }

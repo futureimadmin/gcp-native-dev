@@ -15,6 +15,57 @@ async function postJson(url, headers, body, signal, label) {
   return JSON.parse(text);
 }
 
+/* Gemini text / chat models. tier: 'free' = the Gemini API has a free tier for it (rate limited, Google may use the content to improve its
+   products), 'paid' = pay per use only. Source: Google's model and pricing pages (aistudio.google.com/docs/models and /docs/pricing).
+   Google adds models often, so the app also asks the API for the models your key / sign-in can use and appends any it does not know. */
+const GEMINI_MODELS = [
+  ['gemini-4-carbon', 'paid', 'Gemini 4. Strongest reasoning model: complex coding, multimodal work, science. No free tier.'],
+  ['gemini-4-argon', 'paid', 'Gemini 4. Efficient frontier reasoning: faster responses and fewer tokens than Carbon. No free tier.'],
+  ['gemini-4-hydrogen', 'free', 'Gemini 4. Fast everyday model for coding and agents, 1M-token context. Free tier.'],
+  ['gemini-3.8-flash', 'free', 'Gemini 3.8 Flash. Software engineering and autonomous agents. Free tier.'],
+  ['gemini-3.6-flash', 'free', 'Gemini 3.6 Flash. Balances speed and multimodal ability for general tasks. Free tier.'],
+  ['gemini-3.5-flash-lite', 'free', 'Gemini 3.5 Flash-Lite. Fastest and most cost-effective 3.5 model for high volume. Free tier.'],
+  ['gemini-3.1-flash-lite', 'free', 'Gemini 3.1 Flash-Lite. Frontier-class performance at lower cost. Free tier.'],
+  ['gemini-3.1-pro-preview', 'paid', 'Gemini 3.1 Pro (preview). No free tier.'],
+  ['gemini-3-flash-preview', 'free', 'Gemini 3 Flash (preview). Frontier-class performance at lower cost. Free tier.'],
+  ['gemini-2.5-pro', 'free', 'Deprecated: existing users only. Requests move to gemini-3.8-flash on 1 December 2026. Free tier.'],
+  ['gemini-2.5-flash', 'free', 'Deprecated: existing users only. Requests move to gemini-3.5-flash-lite on 1 December 2026. Free tier.'],
+  ['gemini-2.5-flash-lite', 'free', 'Fastest, most budget-friendly 2.5 model. Still served. Free tier.'],
+];
+const geminiIds = GEMINI_MODELS.map((m) => m[0]);
+const geminiInfo = Object.fromEntries(GEMINI_MODELS.map(([id, tier, note]) => [id, { tier, note }]));
+
+/* Claude models (platform.claude.com/docs/en/about-claude/models/overview). The API has no free tier, so every model is paid (orange);
+   the price per million input / output tokens is in the hover text. Mythos models are limited-access and show up only if your key has them. */
+const CLAUDE_MODELS = [
+  ['claude-fable-5-2', '$8 / $40 per MTok. Demanding reasoning and long-horizon agentic work. 1M context.'],
+  ['claude-opus-5-5', '$4 / $20 per MTok. Long-running agentic coding and knowledge work. 1M context.'],
+  ['claude-sonnet-5-5', '$2 / $10 per MTok. Best combination of speed and intelligence. 1M context.'],
+  ['claude-haiku-5-5', 'From $0.10 / $0.50 per MTok. Fastest: classification, extraction, routing. 1M context.'],
+  ['claude-fable-5-1', '$10 / $50 per MTok. Earlier Fable.'],
+  ['claude-fable-5', '$10 / $50 per MTok. Earlier Fable.'],
+  ['claude-opus-5', '$5 / $25 per MTok. Earlier Opus.'],
+  ['claude-sonnet-5', '$2 / $10 per MTok. Earlier Sonnet.'],
+  ['claude-opus-4-8', '$5 / $25 per MTok. Earlier Opus.'],
+  ['claude-opus-4-7', '$5 / $25 per MTok. Earlier Opus.'],
+  ['claude-opus-4-6', '$5 / $25 per MTok. Earlier Opus.'],
+  ['claude-sonnet-4-6', '$3 / $15 per MTok. Earlier Sonnet.'],
+  ['claude-opus-4-5', '$5 / $25 per MTok. 200K context.'],
+  ['claude-sonnet-4-5', '$3 / $15 per MTok. 200K context.'],
+  ['claude-haiku-4-5', '$1 / $5 per MTok. 200K context.'],
+];
+const claudeIds = CLAUDE_MODELS.map((m) => m[0]);
+const claudeInfo = Object.fromEntries(CLAUDE_MODELS.map(([id, note]) => [id, { tier: 'paid', note }]));
+// Claude Code runs on your Claude plan (or Console account), so there is no per-model price colour: aliases first, then exact models
+const CC_ALIASES = [['default', 'The model your plan or account chooses.'], ['sonnet', 'Latest Sonnet.'], ['opus', 'Latest Opus.'], ['haiku', 'Latest Haiku (fastest).']];
+const claudeCodeIds = [...CC_ALIASES.map((a) => a[0]), ...claudeIds];
+const claudeCodeInfo = Object.fromEntries([...CC_ALIASES.map(([id, note]) => [id, { note }]), ...CLAUDE_MODELS.map(([id, note]) => [id, { note }])]);
+
+/** Models that are not for chat (speech, images, embeddings, live audio ...) are left out of the lists. */
+const NOT_CHAT = /embedding|tts|image|imagen|veo|lyria|live|audio|transcribe|translate|omni|robotics|computer-use|aqa|learnlm|decision|banana|customtools|vision-only/i;
+/** Old dated snapshots and experiments (gemini-1.5-pro-002, ...-preview-04-17, ...-exp-03-25) are hidden from the live list. */
+const STALE = /-\d{2}-\d{2}$|-exp-|-\d{3}$|^gemini-1\./i;
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -56,8 +107,8 @@ function registerSignedInProviders(ctx) {
   setTimeout(() => { if (claudeFile()) runClaude('Reply with: ok').catch(() => {}); }, 4000);
 
   ctx.ai.register({
-    id: 'claude-code', name: 'Claude Code (your Claude login)', needsKey: false, auth: 'signin',
-    models: ['default', 'sonnet', 'opus', 'haiku'], defaultModel: 'default',
+    id: 'claude-code', name: 'Claude Code', needsKey: false, auth: 'signin',
+    models: claudeCodeIds, modelInfo: claudeCodeInfo, defaultModel: 'default',
     login: { cmd: 'claude', args: ['auth', 'login'] },
     canEdit: true,
     /** Streams a Claude Code turn into the IDE. Follow-up turns resume the same session so Claude keeps its context. */
@@ -114,7 +165,7 @@ function registerSignedInProviders(ctx) {
         child.stdin.end(prompt);
       });
     },
-    help: 'Uses the Claude Code you already installed and signed in to (your Claude subscription or Console account). No API key. Runs read-only in your project folder.',
+    help: 'Uses the Claude Code installed on this computer, signed in with a Claude subscription or Console account. No API key. Runs read-only in your project folder.',
     async status() {
       if (!claudeFile()) return { signedIn: false, detail: 'Claude Code is not installed. Install: npm install -g @anthropic-ai/claude-code' };
       const r = await ctx.exec('claude', ['auth', 'status'], { timeout: 20000 });
@@ -156,8 +207,17 @@ function registerSignedInProviders(ctx) {
   }
 
   ctx.ai.register({
-    id: 'gemini-vertex', name: 'Gemini (your Google Cloud login)', needsKey: false, auth: 'signin',
-    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'], defaultModel: 'gemini-2.5-flash',
+    id: 'gemini-vertex', name: 'Gemini (Google Cloud)', needsKey: false, auth: 'signin',
+    models: geminiIds, modelInfo: geminiInfo, defaultModel: 'gemini-3.8-flash',
+    async listModels() {
+      const token = await adcToken();
+      const project = await adcProject();
+      const res = await fetch('https://aiplatform.googleapis.com/v1beta1/publishers/google/models?pageSize=200&listAllVersions=false', { headers: { Authorization: `Bearer ${token}`, ...(project ? { 'x-goog-user-project': project } : {}) }, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) throw new Error(`Model list ${res.status}`);
+      const j = await res.json();
+      return (j.publisherModels || []).map((m) => String(m.name || '').split('/').pop()).filter((id) => /^gemini-/.test(id) && !NOT_CHAT.test(id) && !STALE.test(id));
+    },
+    tierNote: 'Green = the Gemini API has a free tier for this model, orange = paid only. Through Google Cloud (Vertex AI) every call is billed to your project (new Google Cloud accounts may have free credits), so the free tier applies to the Gemini (API key) option.',
     help: 'Uses the same Application Default Credentials as the Google Cloud connection (Vertex AI in your project). No API key. Your project needs the Vertex AI API enabled and the "Vertex AI User" role.',
     async status() {
       try { await adcToken(); } catch (e) { return { signedIn: false, detail: e.message }; }
@@ -168,17 +228,22 @@ function registerSignedInProviders(ctx) {
       const project = await adcProject();
       if (!project) throw new Error('Select a Google Cloud project first (Clouds view).');
       const token = await adcToken();
-      const location = 'us-central1';
-      const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(project)}/locations/${location}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
-      const res = await fetch(url, {
-        method: 'POST', signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-          contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        }),
+      // the newest (Gemini 3) models are served from the global endpoint, the others from a region
+      const order = /^gemini-[3-9]/.test(model) ? ['global', 'us-central1'] : ['us-central1', 'global'];
+      const body = JSON.stringify({
+        ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+        contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
       });
-      const text = await res.text();
+      let res;
+      let text = '';
+      for (const location of order) { // a model lives either at the global endpoint or in a region: try the likely one first
+        const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`;
+        res = await fetch(`https://${host}/v1/projects/${encodeURIComponent(project)}/locations/${location}/publishers/google/models/${encodeURIComponent(model)}:generateContent`, {
+          method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body,
+        });
+        text = await res.text();
+        if (res.status !== 404) break;
+      }
       if (!res.ok) {
         let msg = text.slice(0, 300);
         try { msg = JSON.parse(text).error.message; } catch { /* raw */ }
@@ -201,8 +266,14 @@ exports.activate = (ctx) => {
   // Anthropic Claude (Messages API)
   ctx.ai.register({
     id: 'claude', name: 'Claude (API key)', needsKey: true,
-    models: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5'],
+    models: claudeIds, modelInfo: claudeInfo,
     defaultModel: 'claude-sonnet-5-5',
+    tierNote: 'Orange = paid (the Claude API has no free tier). Hover a model for its price per million input / output tokens.',
+    async listModels({ key }) {
+      const res = await fetch('https://api.anthropic.com/v1/models?limit=100', { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) throw new Error(`Model list ${res.status}`);
+      return ((await res.json()).data || []).map((m) => m.id).filter(Boolean);
+    },
     help: 'Create a key at console.anthropic.com. Code you attach is sent to Anthropic.',
     async chat({ model, system, messages, key, signal }) {
       const j = await postJson('https://api.anthropic.com/v1/messages', { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
@@ -214,8 +285,14 @@ exports.activate = (ctx) => {
   // Google Gemini (Generative Language API)
   ctx.ai.register({
     id: 'gemini', name: 'Gemini (API key)', needsKey: true,
-    models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
-    defaultModel: 'gemini-2.5-pro',
+    models: geminiIds, modelInfo: geminiInfo,
+    defaultModel: 'gemini-3.8-flash',
+    async listModels({ key }) {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) throw new Error(`Model list ${res.status}`);
+      return ((await res.json()).models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => String(m.name).replace(/^models\//, '')).filter((id) => /^gemini-/.test(id) && !NOT_CHAT.test(id) && !STALE.test(id));
+    },
+    tierNote: 'Green = free tier (no charge within Google\u2019s rate limits; on the free tier Google may use your content to improve its products). Orange = paid only, billed per use.',
     help: 'Create a key at aistudio.google.com. Code you attach is sent to Google.',
     async chat({ model, system, messages, key, signal }) {
       const j = await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { 'x-goog-api-key': key },

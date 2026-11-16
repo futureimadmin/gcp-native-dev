@@ -13,6 +13,20 @@ async function loadAi(fresh) {
     chat.provider = (ready || state.ai.api[0] || {}).id || '';
   }
   renderAiPanel();
+  if (!fresh || !loadAi.refreshing) refreshModelLists();
+}
+
+/** Once per provider: ask which models the account can use, and add the ones the built-in list does not have. */
+async function refreshModelLists() {
+  if (loadAi.refreshing || !state.ai) return;
+  const todo = state.ai.api.filter((p) => p.canListModels && p.ready && !p.modelsLoaded);
+  if (!todo.length) return;
+  loadAi.refreshing = true;
+  try {
+    for (const p of todo) await tryInv('ai:refreshModels', p.id);
+    state.ai = await inv('ai:list', false);
+    renderAiPanel();
+  } catch { /* the built-in list stays */ } finally { loadAi.refreshing = false; }
 }
 
 const curProvider = () => (state.ai && state.ai.api.find((a) => a.id === chat.provider)) || null;
@@ -69,14 +83,53 @@ function renderMessage(m) {
     m.chips && m.chips.length ? h('div', { class: 'chips' }, m.chips.map((c) => h('span', { class: 'chip', text: c }))) : null);
 }
 
+/** A model drop-down. Models with a known price tier are coloured: green = free tier, orange = paid. "Other…" lets you type any model id. */
+const TIER_UI = { free: ['#4caf50', 'free tier'], paid: ['#ff9800', 'paid'] };
+function modelPicker(p, current, onChange) {
+  const info = p.modelInfo || {};
+  const sel = h('select', { class: 'modelpick' });
+  const ids = [...p.models];
+  if (current && !ids.includes(current)) ids.unshift(current);
+  const addOpt = (id) => {
+    const t = info[id] && info[id].tier;
+    const o = h('option', { value: id, text: t ? `● ${id}  ·  ${TIER_UI[t][1]}` : id, title: (info[id] && info[id].note) || '' });
+    o.dataset.tier = t || '';
+    if (t) o.style.color = TIER_UI[t][0];
+    return o;
+  };
+  const paint = () => { const o = sel.selectedOptions[0]; const t = o && o.dataset.tier; sel.style.color = t ? TIER_UI[t][0] : ''; sel.title = (o && o.title) || ''; };
+  sel.append(...ids.map(addOpt), h('option', { value: '__other', text: 'Other model…' }));
+  sel.value = current || p.model || ids[0] || '';
+  paint();
+  let last = sel.value;
+  sel.onchange = async () => {
+    if (sel.value === '__other') {
+      const v = await promptText('Model name', 'for example gemini-2.5-flash or llama3.1');
+      if (!v) { sel.value = last; paint(); return; }
+      if (![...sel.options].some((o) => o.value === v)) sel.insertBefore(addOpt(v), sel.lastChild);
+      sel.value = v;
+    }
+    last = sel.value; paint();
+    if (onChange) await onChange(sel.value);
+  };
+  return sel;
+}
+
+/** Small legend under a provider's model list when its models have tiers. */
+const tierLegend = (p) => (p && p.modelInfo && Object.keys(p.modelInfo).length ? h('span', { class: 'tierlegend', title: p.tierNote || '' }, h('span', { style: 'color:#4caf50', text: '● free tier' }), '  ', h('span', { style: 'color:#ff9800', text: '● paid' })) : null);
+
 function renderAiPanel() {
   const ai = state.ai;
   const sel = $('ai-provider');
   if (!ai) return;
   sel.replaceChildren(...ai.api.map((a) => h('option', { value: a.id, text: `${a.name}${a.ready ? '' : a.auth === 'signin' ? ' (sign in)' : ' (no key)'}`, selected: a.id === chat.provider })));
   const p = curProvider();
-  $('ai-model').value = p ? p.model : '';
-  $('ai-models').replaceChildren(...(p ? p.models : []).map((m) => h('option', { value: m })));
+  if (p) {
+    const pick = modelPicker(p, p.model, async (v) => { const r = await tryInv('ai:setConfig', p.id, { model: v }); if (!r.ok) status(r.error, true); else p.model = v; });
+    pick.id = 'ai-model';
+    $('ai-model').replaceWith(pick);
+    const lg = $('ai-legend'); lg.replaceChildren(...(tierLegend(p) ? [tierLegend(p)] : [])); lg.title = p.tierNote || '';
+  }
   $('ai-cli').replaceChildren(...ai.cli.map((a) => h('button', { class: 'subtle', text: a.name, title: a.installed ? (a.id === 'claude-code' ? 'Chat with Claude Code in this panel' : `Open ${a.name} in a console window`) : a.installHint, disabled: !a.installed, onclick: () => launchCli(a.id) })));
 
   const log_ = $('ai-log');
@@ -162,7 +215,6 @@ async function launchCli(id) {
 
 function wireAi() {
   $('ai-provider').onchange = (e) => { chat.provider = e.target.value; chat.messages = []; chat.session = ''; renderAiPanel(); };
-  $('ai-model').onchange = async (e) => { const p = curProvider(); if (!p) return; const r = await tryInv('ai:setConfig', p.id, { model: e.target.value.trim() }); if (!r.ok) status(r.error, true); else p.model = e.target.value.trim(); };
   $('ai-send').onclick = () => (chat.busy && chat.streamId ? tryInv('ai:cancel', chat.streamId) : sendChat());
   $('ai-edits').onchange = async (e) => {
     if (e.target.checked && !(await confirmBox('Let Claude edit files in this project?', 'Claude Code can create and change files in the open project folder without asking each time. Use Git so you can review and undo changes.'))) { e.target.checked = false; return; }
