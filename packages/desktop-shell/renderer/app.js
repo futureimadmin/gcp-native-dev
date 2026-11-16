@@ -171,7 +171,9 @@ async function main() {
     $('modal-root').addEventListener('mousedown', (e) => { if (e.target.id === 'modal-root') $('modal-root').classList.add('hidden'); });
     cns.on('menu', ({ id, arg }) => CNS.run(id, arg));
 
+    wireSections();
     await loadRendererPlugins();
+    renderSections();
     buildActivityBar();
     CNS.on('views-changed', buildActivityBar);
     renderPills();

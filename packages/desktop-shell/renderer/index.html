@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="styles.css" />
 <link rel="stylesheet" href="advisor.css" />
 <link rel="stylesheet" href="landing.css" />
+<link rel="stylesheet" href="sections.css" />
 </head>
 <body>
 <div id="app">
@@ -59,6 +60,8 @@
           <p>No folder opened.</p>
           <button class="primary" id="btn-open-folder">Open Folder</button>
         </div>
+        <div id="side-split" class="hidden" title="Drag to resize (double-click to reset)"></div>
+        <div id="side-sections" class="hidden"></div>
       </section>
 
       <section id="view-search" class="view hidden"></section>
@@ -132,6 +135,7 @@
   <footer id="statusbar">
     <span id="st-cn" class="hidden" title="Click to switch environment"></span>
     <span id="st-cloud" title="Click to open Clouds">No cloud sign-in</span>
+    <span id="st-branch" class="hidden" title="Git branch (click to switch)"></span>
     <span id="st-run" class="hidden"></span>
     <span id="st-problems" class="hidden" title="Compile problems (click to open)"></span>
     <span id="st-advice" class="hidden" title="Code advisor: SOLID warnings (orange) and modern alternatives (click to open the list)"></span>
@@ -158,6 +162,8 @@
 
 <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
 <script src="core.js"></script>
+<script src="logos.js"></script>
+<script src="sections.js"></script>
 <script src="workbench.js"></script>
 <script src="workspace.js"></script>
 <script src="clouds.js"></script>

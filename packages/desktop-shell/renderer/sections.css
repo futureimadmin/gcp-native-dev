@@ -1,0 +1,70 @@
+/* Sidebar sections under the Explorer: Source Control, Build */
+#sidebar { display: flex; flex-direction: column; }
+#sidebar .view { flex: none; }
+#view-explorer:not(.hidden) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#view-explorer #tree { flex: 1 1 auto; min-height: 90px; overflow: auto; }
+#side-split { height: 5px; flex: none; cursor: row-resize; background: var(--line); } #side-split:hover { background: var(--accent); }
+#side-sections { flex: 0 0 var(--sections-h, 52%); min-height: 120px; overflow: auto; border-top: 1px solid var(--line); background: var(--bg2); }
+.ssec { border-bottom: 1px solid var(--line); }
+.ssec-h { display: flex; align-items: center; gap: 6px; padding: 5px 10px; cursor: pointer; user-select: none; font-size: 11px; letter-spacing: .06em; font-weight: 700; color: var(--dim); position: sticky; top: 0; background: var(--bg2); z-index: 2; }
+.ssec-h:hover { color: var(--fg); } .ssec-h .caret { width: 10px; font-size: 10px; } .ssec-h .actions { display: flex; gap: 2px; }
+.ssec-h .actions button, .sbtn { padding: 1px 6px; background: transparent; border: none; color: var(--dim); font-size: 13px; cursor: pointer; border-radius: 4px; } .ssec-h .actions button:hover, .sbtn:hover { background: var(--bg3); color: var(--fg); }
+.sbadge { background: var(--accent); color: #0e0f0c; border-radius: 9px; padding: 0 6px; font-size: 10px; font-weight: 700; }
+.ssec.collapsed .ssec-b { display: none; } .ssec-b { padding: 4px 0 8px; }
+svg.logo { flex: none; vertical-align: middle; }
+
+/* Source control */
+.scm-pad { padding: 0 10px; }
+.scm-branch { display: flex; align-items: center; gap: 6px; padding: 4px 10px; flex-wrap: wrap; }
+.scm-branch .bname { display: flex; align-items: center; gap: 6px; background: var(--bg3); border: 1px solid var(--line); border-radius: 12px; padding: 2px 10px; cursor: pointer; font-weight: 600; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-branch .bname:hover { border-color: var(--accent); } .scm-branch .sync { color: var(--dim); font-size: 11px; }
+.scm-tools { display: flex; gap: 2px; padding: 0 8px 4px; flex-wrap: wrap; } .scm-tools .sbtn { font-size: 12px; padding: 2px 7px; border: 1px solid transparent; } .scm-tools .sbtn:hover { border-color: var(--line); }
+.scm-tools .sbtn.busy { opacity: .5; pointer-events: none; }
+.scm-msg { width: calc(100% - 20px); margin: 4px 10px; min-height: 54px; resize: vertical; background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 6px; padding: 6px 8px; font: 12px "Segoe UI", sans-serif; box-sizing: border-box; }
+.scm-msg:focus { outline: none; border-color: var(--accent); }
+.scm-opts { display: flex; gap: 12px; padding: 0 10px; font-size: 12px; flex-wrap: wrap; } .scm-opts label { display: flex; align-items: center; gap: 4px; margin: 0; cursor: pointer; }
+.scm-commit { display: flex; gap: 6px; padding: 6px 10px; } .scm-commit button { flex: 1; } .scm-commit button.primary { flex: 1.4; }
+.scm-grp { display: flex; align-items: center; gap: 6px; padding: 5px 10px 2px; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--dim); cursor: pointer; } .scm-grp .spacer { flex: 1; } .scm-grp .cnt { background: var(--bg3); border-radius: 9px; padding: 0 6px; }
+.scm-file { display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 16px; cursor: pointer; font-size: 12px; } .scm-file:hover { background: var(--bg3); }
+.scm-file .fn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .scm-file .fd { color: var(--dim); margin-left: 6px; font-size: 11px; }
+.scm-file .fa { display: none; gap: 1px; } .scm-file:hover .fa { display: flex; } .scm-file .fa button { padding: 0 5px; background: transparent; border: none; color: var(--dim); cursor: pointer; font-size: 13px; } .scm-file .fa button:hover { color: var(--fg); }
+.st-badge { width: 16px; text-align: center; font-weight: 800; font-size: 11px; flex: none; }
+.st-M { color: #e0b44f; } .st-A { color: #7fbf8a; } .st-D { color: #d9776b; } .st-R { color: #6ab0f3; } .st-U { color: #ff7a59; } .st-Q { color: #7fbf8a; } .st-C { color: #6ab0f3; }
+.scm-card { margin: 6px 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); } .scm-card h4 { margin: 0 0 6px; }
+.scm-hist { display: flex; flex-direction: column; gap: 1px; } .scm-commitrow { padding: 3px 10px 3px 16px; cursor: pointer; font-size: 12px; } .scm-commitrow:hover { background: var(--bg3); }
+.scm-commitrow .sub { display: flex; gap: 6px; align-items: baseline; } .scm-commitrow .subj { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .scm-commitrow .meta { color: var(--dim); font-size: 11px; }
+.refchip { font-size: 10px; border: 1px solid var(--accent); color: var(--accent2); border-radius: 8px; padding: 0 5px; margin-right: 3px; } .refchip.head { background: var(--accent); color: #0e0f0c; }
+.scm-warn { margin: 4px 10px; padding: 6px 8px; border-radius: 6px; font-size: 12px; background: #3a2b14; color: #e8c37a; } .scm-err { background: #3a1c18; color: #f0a79d; white-space: pre-wrap; }
+.scm-progress { margin: 4px 10px; font-size: 11px; color: var(--dim); white-space: pre-wrap; max-height: 70px; overflow: auto; }
+.ghost { opacity: .6; }
+
+/* diff / commit pages */
+.diffpage { display: flex; flex-direction: column; height: 100%; } .diffpage .dh { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center; } .diffpage .dbody { flex: 1; min-height: 0; }
+.commitpage { max-width: 980px; } .commitpage pre.cm { white-space: pre-wrap; font: 13px "Segoe UI", sans-serif; margin: 6px 0 12px; }
+.cfile { display: flex; gap: 8px; padding: 3px 6px; cursor: pointer; border-radius: 4px; } .cfile:hover { background: var(--bg3); }
+
+/* Build */
+.bld-top { display: flex; align-items: center; gap: 6px; padding: 4px 10px; } .bld-top select { flex: 1; min-width: 0; margin: 0; }
+.bld-tool { display: flex; align-items: center; gap: 8px; padding: 2px 10px 6px; color: var(--dim); font-size: 12px; } .bld-tool b { color: var(--fg); }
+.bld-goals { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 10px 4px; } .bld-goals button { padding: 2px 9px; font-size: 12px; border-radius: 12px; } .bld-goals button.rec { border-color: var(--accent); }
+.bld-opts { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 4px 10px; font-size: 12px; } .bld-opts label { display: flex; align-items: center; gap: 4px; margin: 0; cursor: pointer; }
+.bld-run { display: flex; gap: 6px; padding: 4px 10px; } .bld-run input { flex: 1; margin: 0; min-width: 0; }
+.bld-status { margin: 4px 10px; padding: 5px 8px; border-radius: 6px; font-size: 12px; background: var(--bg); border-left: 3px solid var(--line); } .bld-status.ok { border-left-color: var(--ok); } .bld-status.bad { border-left-color: var(--danger); } .bld-status.run { border-left-color: var(--accent); }
+.bld-sub { margin: 2px 0; } .bld-sub > summary { cursor: pointer; padding: 3px 10px; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--dim); } .bld-sub[open] > summary { color: var(--fg); }
+.bld-row { display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 18px; font-size: 12px; } .bld-row:hover { background: var(--bg3); } .bld-row .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .bld-row .vv { color: var(--dim); font-size: 11px; } .bld-row .sc { font-size: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 0 5px; color: var(--dim); }
+.bld-row button { padding: 0 6px; background: transparent; border: none; color: var(--dim); cursor: pointer; } .bld-row button:hover { color: var(--fg); }
+.bld-kv { padding: 1px 10px 1px 18px; font-size: 12px; color: var(--dim); } .bld-kv b { color: var(--fg); font-weight: 600; }
+.olink { cursor: pointer; text-decoration: underline; }
+
+/* git status colours in the Explorer */
+#tree .node[data-git="M"] > span:last-of-type, #tree .node[data-git="T"] > span:last-of-type { color: #e0b44f; }
+#tree .node[data-git="A"] > span:last-of-type, #tree .node[data-git="?"] > span:last-of-type, #tree .node[data-git="C"] > span:last-of-type { color: #7fbf8a; }
+#tree .node[data-git="D"] > span:last-of-type { color: #d9776b; text-decoration: line-through; }
+#tree .node[data-git="R"] > span:last-of-type { color: #6ab0f3; } #tree .node[data-git="!"] > span:last-of-type { color: #ff7a59; font-weight: 700; }
+#tree .node[data-gitc="1"]:not([data-git])::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #e0b44f; margin-left: auto; flex: none; opacity: .8; }
+#st-branch { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+
+/* change marks in the editor gutter */
+.monaco-editor .git-gutter-add { border-left: 3px solid #2ea043; margin-left: 3px; width: 3px !important; }
+.monaco-editor .git-gutter-mod { border-left: 3px solid #4a9eff; margin-left: 3px; width: 3px !important; }
+.monaco-editor .git-gutter-del { margin-left: 3px; width: 6px !important; background: linear-gradient(to bottom right, transparent 50%, #d9534f 50%) top left / 6px 6px no-repeat; }

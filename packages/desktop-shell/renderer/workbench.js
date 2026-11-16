@@ -138,6 +138,7 @@ async function saveTab(t) {
   t.saved = text;
   if (typeof afterSave === 'function') afterSave(t);
   if (typeof javaFileSaved === 'function') javaFileSaved(t);
+  CNS.emit('file-saved', t);
 }
 
 async function saveActive() {

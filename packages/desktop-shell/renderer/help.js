@@ -88,6 +88,33 @@ const HELP = [
     P('Resource lists exist for Cloud Run, Cloud Functions, GKE, Cloud Storage, Cloud SQL, Secret Manager (names only), Artifact Registry, Cloud Build and Pub/Sub. Other services show a short note and a button that opens the provider console in your normal browser.'),
   ] },
 
+  { id: 'scm', title: 'Source control (Git)', body: [
+    ['h1', 'Source control'],
+    P('The SOURCE CONTROL section sits under the Explorer (drag the bar between them to resize, click a title to collapse it). It works with every Git host: GitHub, GitLab, Bitbucket, Azure DevOps, Gitea / Forgejo / Codeberg and your own server. The host is recognised from the remote address and only changes the logo and the web links.'),
+    H2('Everyday work'),
+    UL('Changes are listed as Staged, Changes and Merge conflicts. Click a file to see the difference, + to stage, − to unstage, ↶ to discard. Right-click a file for more (history, ignore, accept ours / theirs).',
+      'Write a message and press Commit (Ctrl+Enter). Tick Amend last commit to change the last commit instead of adding one: its message is filled in and staged changes are added to it. Commit & Push does both; an amended commit that was already pushed is force-pushed safely (with lease) after you confirm.',
+      'Fetch, Pull, Push and Sync are in the toolbar; the ⋯ menu has pull with rebase, push tags, force push, branches, tags, stash, remotes, history and Open on host (repository, branch, commits, new pull / merge request, issues, CI).',
+      'The branch chip switches or creates branches, and shows how many commits you are ahead or behind. The status bar shows it too.'),
+    H2('More'),
+    UL('Explorer files are coloured by status (modified, new, deleted, conflict) and the editor margin marks changed lines against the last commit (green new, blue changed, red deleted).',
+      'Branches (switch, merge, rebase, delete), Tags, Stash, Remotes and History (also per file) open from the ⋯ menu or the command palette ("Source Control: …"). Click a commit to see its files and each file\u2019s changes; right-click it to cherry-pick, revert, reset, branch or tag.',
+      'Clone works for any address (File > Clone Git Repository). It shows the host, can check the address and list branches first, supports a shallow clone and submodules, and opens the project when it finishes.',
+      'No repository yet: Initialize one, or Publish to a host (choose the host, create an empty repository there, paste its address).'),
+    P('Sign-in is done by Git itself: Git Credential Manager (a sign-in window may appear for HTTPS) or your SSH key. The IDE never sees your password or token. Mercurial and Subversion are not covered.'),
+  ] },
+
+  { id: 'build', title: 'Build tools', body: [
+    ['h1', 'Build tools'],
+    P('The BUILD section (under Source Control) finds every build file in the project, monorepos included, and lets you pick which one to work on: Maven, Gradle, Ant, npm / Yarn / pnpm / Bun, pip / Poetry / uv, Go, Cargo, .NET, Make, CMake, Composer, Bundler, Flutter, sbt and Bazel.'),
+    UL('Recommended goals are buttons (for Maven: clean install, clean package, test, plus run goals for the plugins your pom uses, such as spring-boot:run or quarkus:dev); ALL GOALS lists the rest, grouped. npm shows every script from package.json.',
+      'Tick options such as Skip tests, Offline, Update snapshots, Parallel; choose Maven profiles and a module (with its dependencies). Type your own goals in the box, press Enter, and star the ones you want to keep.',
+      'Output goes to the OUTPUT panel: errors and warnings that name a file and line are clickable, Stop ends the build, and a result card shows the time and the error count with Run again.',
+      'PROJECT, DEPENDENCIES, MODULES and PLUGINS come from your build file. + Add searches Maven Central (or npm, PyPI, crates.io, NuGet, Packagist) and edits pom.xml / build.gradle, or installs the package with the tool. ✕ removes one. Tree, Outdated and Analyze / Audit run the tool\u2019s own report.',
+      'If the tool is not installed the section says so and Set up… opens Settings > Runtimes. Projects with a wrapper (mvnw, gradlew) use it unless you untick wrapper.'),
+    P('Command palette: Build: Run Goal…, Run Again, Stop, Run Custom Goals…, Add Dependency…'),
+  ] },
+
   { id: 'envs', title: 'Environments & architecture', body: [
     ['h1', 'Environments and architecture'],
     P('Enable Cloud Native Development (project menu, or the Clouds view). If no cloud is connected the IDE asks you to connect one first. Then the Cloud Native Architecture page opens: choose how many environments you want and what to call them (dev, sit, uat, prod, or qa, staging, live ... up to 8), and see how they will be built in every cloud you are connected to. Nothing is created until you press Provision.'),

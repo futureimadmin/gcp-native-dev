@@ -154,6 +154,7 @@ const CNS = {
       commands: { register: (cid, fn, title) => CNS.command(cid, fn, title) },
       views: { register: (v) => { CNS.views.push({ ...v, plugin: id }); CNS.emit('views-changed'); } },
       toolbar: { add: (t) => { CNS.toolbar.push({ ...t, plugin: id }); CNS.emit('toolbar-changed'); } },
+      sections: { register: (s) => { CNS.sections.push({ ...s, plugin: id }); CNS.emit('sections-changed'); } },
       on: (evt, fn) => CNS.on(evt, fn),
       workspace: () => state.workspace,
       shared: { get: (k) => state[k], set: (k, v) => { state[k] = v; } },

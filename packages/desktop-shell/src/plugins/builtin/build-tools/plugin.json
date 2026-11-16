@@ -1,0 +1,8 @@
+{
+  "id": "cns.build-tools",
+  "name": "Build Tools",
+  "version": "1.0.0",
+  "description": "Build, test, run and manage dependencies for Maven, Gradle, Ant, npm / Yarn / pnpm / Bun, pip / Poetry / uv, Go, Cargo, .NET, Make, CMake, Composer, Bundler, Flutter, sbt and Bazel projects, including monorepos with several tools.",
+  "main": "main.js",
+  "renderer": "renderer.js"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "cns.scm-git",
+  "name": "Source Control (Git)",
+  "version": "1.0.0",
+  "description": "Stage, commit (with amend), push, pull, branches, stash, tags, history and clone for any Git host: GitHub, GitLab, Bitbucket, Azure DevOps, Gitea / Forgejo / Codeberg and self-hosted servers.",
+  "main": "main.js",
+  "renderer": "renderer.js"
+}
