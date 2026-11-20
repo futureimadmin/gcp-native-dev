@@ -62,7 +62,15 @@ exports.build = (ctx, shared) => {
   async function projects() {
     const r = await exec('gcloud', ['projects', 'list', '--filter=lifecycleState=ACTIVE', '--format=json', '--limit=500'], { timeout: 90000 });
     if (!r.ok) throw new Error((r.err || 'Could not list projects.').split(/\r?\n/)[0]);
-    return parseJson(r).map((p) => ({ id: p.projectId, name: p.name || '', parent: p.parent ? `${p.parent.type}/${p.parent.id}` : '', labels: p.labels || {} })).filter((p) => PROJECT_RE.test(p.id));
+    // which projects are billed: one list per open billing account (a project without billing cannot use the APIs the IDE needs)
+    const accts = await exec('gcloud', ['billing', 'accounts', 'list', '--filter=open=true', '--format=value(name)'], { timeout: 40000 });
+    const billed = new Set();
+    let known = accts.ok;
+    for (const a of accts.ok ? accts.out.split(/[\r\n]+/).map((x) => x.trim().replace('billingAccounts/', '')).filter(Boolean) : []) {
+      const l = await exec('gcloud', ['billing', 'projects', 'list', `--billing-account=${a}`, '--format=value(projectId)'], { timeout: 60000 });
+      if (l.ok) l.out.split(/[\r\n]+/).forEach((x) => x.trim() && billed.add(x.trim())); else known = false;
+    }
+    return parseJson(r).map((p) => ({ id: p.projectId, name: p.name || '', parent: p.parent ? `${p.parent.type}/${p.parent.id}` : '', labels: p.labels || {}, billed: known ? billed.has(p.projectId) : null })).filter((p) => PROJECT_RE.test(p.id));
   }
 
   /* ------------------------------ the plan ------------------------------ */

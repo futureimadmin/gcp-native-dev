@@ -7,6 +7,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { exec } = require('./util');
 const { ProjectModel, inside, hash, fwd } = require('./projectmodel');
 
@@ -121,6 +122,126 @@ function register({ ipcMain, wrap, tools, getWorkspace, cacheRoot }) {
   }));
 
   /** Compile a whole module (Build). */
+  /* ---- members of a class that is not in the open project (JDK, Maven/Gradle dependencies), read with javap ---- */
+  let javapPath = null;
+  /** javap sits next to javac in the JDK. The Windows "javapath" shortcut folder only has java and javac, so find the real JDK folder. */
+  async function javapBin() {
+    if (javapPath) return javapPath;
+    const exe = process.platform === 'win32' ? 'javap.exe' : 'javap';
+    const direct = tools.findInPath('javap');
+    if (direct) return (javapPath = direct);
+    const homes = [process.env.JAVA_HOME];
+    const r = await exec('java', ['-XshowSettings:properties', '-version'], { timeout: 20000 });
+    const m = /java\.home\s*=\s*(.+)/.exec(`${r.err}
+${r.out}`);
+    if (m) homes.push(m[1].trim());
+    for (const h of homes.filter(Boolean)) { const f = path.join(h, 'bin', exe); if (fs.existsSync(f)) return (javapPath = f); }
+    return null;
+  }
+  /** Runs a program without a shell and collects its output. */
+  const runPlain = (bin, args, timeout) => new Promise((resolve) => {
+    const child = spawn(bin, args, { windowsHide: true });
+    let out = '';
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* gone */ } }, timeout);
+    child.stdout.on('data', (d) => { out += d; });
+    child.on('error', () => { clearTimeout(timer); resolve({ ok: false, out: '' }); });
+    child.on('close', (code) => { clearTimeout(timer); resolve({ ok: code === 0, out }); });
+  });
+  const memberCache = new Map(); // module + class -> { header, members, supers }
+  const FQN_RE = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
+  const MODS = new Set(['public', 'protected', 'static', 'final', 'abstract', 'default', 'native', 'synchronized', 'transient', 'volatile', 'strictfp']);
+
+  const simplify = (s) => s.replace(/\b(?:[a-z_][\w$]*\.)+([A-Z_$][\w$]*)/g, '$1').replace(/\$/g, '.');
+  const splitTop = (s) => { const out = []; let d = 0; let cur = ''; for (const c of s) { if (c === '<') d++; else if (c === '>') d--; if (c === ',' && d === 0) { out.push(cur.trim()); cur = ''; } else cur += c; } if (cur.trim()) out.push(cur.trim()); return out; };
+  const stripGen = (s) => { let d = 0; let o = ''; for (const c of s) { if (c === '<') d++; else if (c === '>') d--; else if (!d) o += c; } return o.trim(); };
+
+  /** javap text for one class -> { kind, supers: [fqn], members: [...] } */
+  function parseJavap(text, owner) {
+    const lines = text.split(/\r?\n/);
+    const hi = lines.findIndex((l) => /\b(class|interface|enum|record)\s+\S+/.test(l) && /\{\s*$/.test(l));
+    if (hi < 0) return null;
+    const head = lines[hi].replace(/\{\s*$/, '').trim();
+    const kind = /\binterface\b/.test(head) ? 'interface' : 'class';
+    const supers = [];
+    const ex = /\bextends\s+(.+?)(?:\s+implements\s+(.+))?$/.exec(head);
+    const im = /\bimplements\s+(.+)$/.exec(head);
+    if (ex) splitTop(ex[1]).forEach((x) => supers.push(stripGen(x)));
+    if (im) splitTop(im[1]).forEach((x) => supers.push(stripGen(x)));
+    const members = [];
+    for (const raw of lines.slice(hi + 1)) {
+      if (!/^\s{2}\S/.test(raw)) continue;
+      let l = raw.trim().replace(/;$/, '').replace(/\s+throws\s+.+$/, '');
+      if (/^static\s*\{/.test(l)) continue;
+      const mods = [];
+      let rest = l;
+      for (;;) { const w = /^(\w+)\s+/.exec(rest); if (w && MODS.has(w[1])) { mods.push(w[1]); rest = rest.slice(w[0].length); } else break; }
+      if (rest.startsWith('<')) { let d = 0; let i = 0; for (; i < rest.length; i++) { if (rest[i] === '<') d++; else if (rest[i] === '>') { d--; if (!d) break; } } rest = rest.slice(i + 1).trim(); }
+      const p = rest.indexOf('(');
+      if (p >= 0) {
+        const before = rest.slice(0, p).trim();
+        const sp = before.lastIndexOf(' ');
+        if (sp < 0) continue; // constructor
+        const name = before.slice(sp + 1);
+        const ret = simplify(before.slice(0, sp).trim());
+        const used = new Set();
+        const params = splitTop(rest.slice(p + 1, rest.lastIndexOf(')'))).map((t, i) => { const ty = simplify(t); let n = stripGen(ty).replace(/\.\.\.|\[\]/g, '').split('.').pop(); n = (n.charAt(0).toLowerCase() + n.slice(1)).replace(/[^\w]/g, '') || `arg${i + 1}`; if (used.has(n)) n += i + 1; used.add(n); return `${ty} ${n}`; }).join(', ');
+        members.push({ kind: 'method', name, params, ret, mods, owner });
+      } else {
+        const sp = rest.lastIndexOf(' ');
+        if (sp < 0) continue;
+        members.push({ kind: 'field', name: rest.slice(sp + 1), type: simplify(rest.slice(0, sp).trim()), mods, owner });
+      }
+    }
+    return { kind, supers, members };
+  }
+
+  /** "java.util.Map.Entry" -> ["java.util.Map.Entry", "java.util.Map$Entry"]: nested classes have a $ in their binary name */
+  function binaryNames(fqn) { const out = [fqn]; const parts = fqn.split('.'); for (let i = parts.length - 1; i > 0 && /^[A-Z]/.test(parts[i - 1] || ''); i--) out.push(`${parts.slice(0, i).join('.')}.${parts.slice(i).join('$')}`); return [...new Set(out)]; }
+
+  ipcMain.handle('java:members', wrap(async (given, opts = {}) => {
+    const root = workspaceOr(given);
+    const javap = await javapBin();
+    if (!javap) return { members: [], note: 'The JDK tool javap was not found.' };
+    const cands = (Array.isArray(opts.candidates) ? opts.candidates : []).filter((c) => typeof c === 'string' && FQN_RE.test(c)).slice(0, 12);
+    if (!cands.length || typeof opts.file !== 'string' || !inside(root, opts.file)) return { members: [] };
+    const mod = model.moduleFor(root, path.resolve(opts.file));
+    const cp = mod.aggregator ? [] : await model.classpath(root, mod, []);
+    const cpArg = cp.map(fwd).join(path.delimiter);
+    const key = hash(mod.root);
+    const one = async (fqn) => {
+      const ck = `${key}|${fqn}`;
+      if (memberCache.has(ck)) return memberCache.get(ck);
+      let info = null;
+      for (const b of binaryNames(fqn)) {
+        // a Maven classpath is hundreds of jars: far past the Windows command-line limit, so it goes to javap in an argument file
+        const argFile = path.join(model.cacheDir(root), `javap-${hash(b + key)}.args`);
+        fs.mkdirSync(path.dirname(argFile), { recursive: true });
+        // javap itself cannot read argument files, but the java launcher can, and javap is a module of the JDK: run it that way (no shell, no length limit)
+        fs.writeFileSync(argFile, ['--module', 'jdk.jdeps/com.sun.tools.javap.Main', '-public', ...(cpArg ? ['-cp', `"${cpArg}"`] : []), b].join('\n') + '\n', 'utf8');
+        const r = await runPlain(path.join(path.dirname(javap), process.platform === 'win32' ? 'java.exe' : 'java'), [`@${fwd(argFile)}`], 30000);
+        try { fs.rmSync(argFile, { force: true }); } catch { /* temp file */ }
+        if (r.ok) { info = parseJavap(r.out, fqn.split('.').pop()); if (info) break; }
+      }
+      memberCache.set(ck, info);
+      return info;
+    };
+    let top = null;
+    let fqn = '';
+    for (const c of cands) { top = await one(c); if (top) { fqn = c; break; } }
+    if (!top) return { members: [] };
+    // inherited members: walk the supertypes (a few levels), nearest first
+    const members = [...top.members];
+    const seen = new Set([fqn]);
+    let level = top.supers;
+    for (let d = 0; d < 5 && level.length; d++) {
+      const next = [];
+      const infos = await Promise.all(level.filter((s) => !seen.has(s) && s !== 'java.lang.Object').map(async (s) => { seen.add(s); return [s, await one(s)]; }));
+      for (const [s, info] of infos) if (info) { members.push(...info.members); next.push(...info.supers); }
+      level = next;
+    }
+    return { fqn, kind: top.kind, members };
+  }));
+
   ipcMain.handle('javac:compile', wrap(async (given, opts = {}) => {
     const root = workspaceOr(given);
     if (busy) return { busy: true };

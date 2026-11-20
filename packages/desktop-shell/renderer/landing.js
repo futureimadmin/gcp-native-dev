@@ -251,6 +251,14 @@ function cloudPanel(c) {
   return box;
 }
 
+/** What Provision does and does not do. Shown on the architecture page, the wizard review and the result. */
+function topologyNote(existingCode) {
+  return h('div', { class: 'topo-note' },
+    h('b', { text: 'This is the topology, not a deployment.' }),
+    h('span', { text: ' Provision builds the environments only: folders, projects, resource groups or stacks, service accounts, roles and registries. It does not deploy anything. Workloads such as Cloud Run, GKE, Cloud Storage or S3 uploads and AWS Lambda are deployed separately from the IDE, after you have written the code.' }),
+    existingCode ? h('div', { class: 'topo-existing', text: 'This workspace already has source code (for example from GitHub, GitLab or Bitbucket). Deploy it into the first environment yourself, then let your CI/CD pipeline promote it through SIT, UAT and the later environments. Nativity prepares the places it runs in; it does not move your code.' }) : null);
+}
+
 function stepList(pc) {
   const byEnv = new Map();
   for (const s of pc.steps) { const k = (s.group === 'folders' ? 'folders · ' : s.group && s.group.startsWith('app:') ? `${s.group.slice(4)} · ` : s.group === 'shared' ? 'shared project · ' : '') + (s.env || (s.group ? '' : '(shared)') || '(organization)'); if (!byEnv.has(k)) byEnv.set(k, []); byEnv.get(k).push(s); }
@@ -264,6 +272,7 @@ function stepList(pc) {
 function drawLanding() {
   const el = LD.el;
   if (!el) return;
+  if (LD.git === undefined && state.workspace) { LD.git = false; inv('fs:exists', joinPath(state.workspace, '.git')).then((v) => { if (v) { LD.git = true; drawLanding(); } }).catch(() => {}); }
   const live = connectedClouds();
   const appInput = h('input', { value: LD.app, spellcheck: 'false', class: APP_NAME.test(LD.app) ? '' : 'bad', maxlength: 21 });
   appInput.onchange = () => { LD.app = appInput.value.trim().toLowerCase(); drawLanding(); schedulePlan(); };
@@ -285,6 +294,7 @@ function drawLanding() {
       h('h2', { text: 'Cloud Native architecture' }),
       h('p', { class: 'hint', text: 'Pick the environments you want. Each connected cloud shows how they will be built there, using that cloud’s own best practice. Nothing is created until you press Provision.' }),
       h('div', { class: 'card' }, h('div', { class: 'cardh' }, h('b', { text: 'Application name' }), h('small', { class: 't-dim', text: 'Prefix of every project, stack, resource group and namespace' })), appInput),
+      topologyNote(LD.git),
       envEditor(),
       h('div', { class: 'cat bar', text: '2. Architecture per cloud' }), tabs, body,
       LD.run ? runPanel() : null,

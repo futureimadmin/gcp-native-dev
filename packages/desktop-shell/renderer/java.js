@@ -57,6 +57,35 @@ function parseSig(sig, kind, owner, isStatic) {
   return { kind, name: m[1], params: m[2] || '', ret: m[3], type: m[3], mods: isStatic ? ['static', 'public'] : ['public'], owner };
 }
 
+/** Members of classes that come from dependency jars or JDK classes we do not model, read once with javap in the main process. */
+const EXT = new Map(); // simple name -> members (inherited ones included), or null when it could not be read
+const EXT_BUSY = new Map();
+
+/** Possible full names of a simple class name, from the file's imports, the JDK list and its own package. */
+function externalCandidates(name, parsed) {
+  const c = [];
+  for (const i of parsed.imports || []) {
+    if (i.static) continue;
+    if (i.name.endsWith(`.${name}`)) c.push(i.name);
+  }
+  if (JDK_IMPORT[name]) c.push(JDK_IMPORT[name]);
+  for (const i of parsed.imports || []) if (!i.static && i.name.endsWith('.*')) c.push(`${i.name.slice(0, -1)}${name}`);
+  c.push(`java.lang.${name}`);
+  if (parsed.package) c.push(`${parsed.package}.${name}`);
+  return [...new Set(c)];
+}
+
+async function ensureExternal(name, parsed, file) {
+  if (!name || EXT.has(name) || JDK[name] || findProjectType(name, parsed)) return;
+  if (EXT_BUSY.has(name)) return EXT_BUSY.get(name);
+  const p = (async () => {
+    const r = await tryInv('java:members', state.workspace, { file, candidates: externalCandidates(name, parsed) });
+    EXT.set(name, r.ok && r.data && r.data.members && r.data.members.length ? r.data.members : null);
+  })().finally(() => EXT_BUSY.delete(name));
+  EXT_BUSY.set(name, p);
+  return p;
+}
+
 /** All members visible on a type, including inherited ones. statics: true = only static ones, false = only instance. */
 function collectMembers(typeName, parsed) {
   const out = [];
@@ -73,6 +102,8 @@ function collectMembers(typeName, parsed) {
       if (pt.kind !== 'interface') visit('Object', depth + 1);
       return;
     }
+    const ext = EXT.get(nm);
+    if (ext) { out.push(...ext); visit('Object', depth + 1); return; }
     const jt = JDK[nm];
     if (jt) {
       jt.m.forEach((s) => out.push(parseSig(s, 'method', nm, false)));
@@ -165,7 +196,9 @@ function resolveExpr(expr, ctx) {
   for (const seg of parts.slice(1)) {
     const nm = (callName(seg) || /^([A-Za-z_$][\w$]*)/.exec(seg) || [])[1];
     if (!nm) return null;
-    const mem = collectMembers(cur.type, parsed).find((m) => m.name === nm && (callName(seg) ? m.kind === 'method' : m.kind !== 'method'));
+    const all = collectMembers(cur.type, parsed);
+    if (ctx.need !== undefined && (!all.length || all.every((m) => m.owner === 'Object'))) { ctx.need = cur.type; return null; }
+    const mem = all.find((m) => m.name === nm && (callName(seg) ? m.kind === 'method' : m.kind !== 'method'));
     if (!mem) {
       const inner = collectMembers(cur.type, parsed).find((m) => m.kind === 'type' && m.name === nm);
       if (inner) { cur = { type: nm, isStatic: true }; continue; }
@@ -240,7 +273,17 @@ async function javaProvide(model, position, K, R) {
       // member access:  expr.<cursor>
       if (word.startColumn > 1 && lineText[word.startColumn - 2] === '.') {
         const expr = exprBefore(lineText, word.startColumn - 2);
-        const res = expr ? resolveExpr(expr, { text, offset, curType, parsed }) : null;
+        const rctx = { text, offset, curType, parsed, need: '' };
+        const file = (state.tabs.find((t) => t.model === model) || {}).path || (model.uri && model.uri.fsPath) || '';
+        let res = null;
+        // a type that is not in the project (a dependency, a JDK class we do not list): read its members, then try again
+        for (let i = 0; i < 6 && expr; i++) {
+          rctx.need = '';
+          res = resolveExpr(expr, rctx);
+          const miss = rctx.need || (res && res.type && res.type !== '__array__' && !res.isStatic && collectMembers(res.type, parsed).every((m) => m.owner === 'Object') ? res.type : '');
+          if (!miss || EXT.has(miss) || !file) break;
+          await ensureExternal(miss, parsed, file);
+        }
         if (!res || !res.type) return { suggestions: [] };
         if (res.type === '__array__') return { suggestions: [{ label: 'length', kind: K.Field, insertText: 'length', range, detail: 'int' }, { label: 'clone()', kind: K.Method, insertText: 'clone()', range }] };
         const seen = new Set();

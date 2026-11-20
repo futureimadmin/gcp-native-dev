@@ -44,6 +44,18 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
     return promise;
   }
 
+  const orgCache = new Map();
+  async function discoverOrgs(cloudId) {
+    const hit = orgCache.get(cloudId);
+    if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.promise;
+    const p = prov(cloudId);
+    const fn = p.provision.discoverOrgs || p.provision.discover;
+    const promise = Promise.resolve(fn(ctxFor(p)));
+    orgCache.set(cloudId, { at: Date.now(), promise });
+    promise.then((d) => { if (!d || !d.signedIn || !(d.orgs || []).length) orgCache.delete(cloudId); }, () => orgCache.delete(cloudId));
+    return promise;
+  }
+
   function cleanEnvs(envs) {
     if (!Array.isArray(envs) || !envs.length) throw new Error('Choose at least one environment.');
     if (envs.length > MAX_ENVS) throw new Error(`At most ${MAX_ENVS} environments.`);
@@ -59,6 +71,7 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
 
   /* ---------- discovery + plan ---------- */
 
+  ipcMain.handle('prov:discoverOrgs', wrap(async (cloudId) => discoverOrgs(cloudId)));
   ipcMain.handle('prov:discover', wrap(async (cloudId, fresh) => discover(cloudId, !!fresh)));
 
   ipcMain.handle('prov:plan', wrap(async (ws, spec) => {
@@ -223,7 +236,7 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
       results.push({ cloud: cloud.id, envs: doneEnvs, failed: failedEnvs, stopped, apps: recordedApps });
       emit({ type: 'cloud', cloud: cloud.id, status: results[results.length - 1].failed.length || stopped ? 'failed' : 'ok' });
     }
-    discoveryCache.clear(); // what exists has changed
+    discoveryCache.clear(); orgCache.clear(); // what exists has changed
     require('./nativity').writeLog(plan.ws, `provision-${new Date().toISOString().replace(/[:.]/g, '-')}.log`, `${logLines.join('\n')}\n`);
     emit({ type: 'done', cancelled: !!state.cancelled, results });
     runs.delete(runId);

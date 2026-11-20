@@ -57,3 +57,10 @@ button.big { padding: 8px 26px; font-size: 14px; }
 .gw-opts { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .gw-opt { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; margin: 0; } .gw-opt input { margin-top: 3px; } .gw-opt span { display: flex; flex-direction: column; gap: 1px; } .gw-opt b { font-size: 13px; font-weight: 600; } .gw-opt small { color: var(--dim); font-size: 11.5px; line-height: 1.4; }
 .gw-opts, .gw-opts label, .gw-opts b, .gw-opts small { text-transform: none; letter-spacing: normal; }
+
+.runnow { font-size: 12.5px; margin: 6px 0; font-variant-numeric: tabular-nums; } .rungroups { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; } .rungroups .chip.bad { border-color: #d9776b; }
+
+.topo-note { border: 1px solid var(--line); border-left: 3px solid #4285f4; border-radius: 8px; padding: 10px 12px; margin: 10px 0; background: var(--bg2); font-size: 12.5px; line-height: 1.5; } .topo-existing { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+
+.gw-why { color: #ff4040; font-weight: 700; font-size: 13px; }
+.gw-quota { border-left: 3px solid #e0b44f; }

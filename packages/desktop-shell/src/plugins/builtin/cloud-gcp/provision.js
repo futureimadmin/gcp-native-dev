@@ -29,10 +29,11 @@ const CICD_ROLES = ['roles/cloudbuild.builds.builder', 'roles/run.developer', 'r
 exports.build = (ctx) => {
   const { exec } = ctx;
 
-  async function discover() {
+  /** Who is signed in and which organizations they can see. Quick, so the wizard can show its first step before the slower lookups finish. */
+  async function discoverOrgs() {
     const acct = await exec('gcloud', ['auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'], { timeout: 25000 });
     const account = acct.ok ? acct.out.split(/\r?\n/)[0].trim() : '';
-    if (!account) return { signedIn: false, account: '', orgs: [], billing: [], projects: [] };
+    if (!account) return { signedIn: false, account: '', orgs: [], billing: [], projects: [], currentProject: '' };
     const parse = (r) => { try { return JSON.parse(r.out || '[]'); } catch { return []; } };
     const toOrg = (o) => ({ id: String(o.name || '').replace('organizations/', ''), name: o.displayName || o.name });
     // The organization list is what the wizard hangs on, so it is looked up first, on its own (several gcloud processes at once can
@@ -42,6 +43,8 @@ exports.build = (ctx) => {
     for (let i = 0; i < 3 && !orgList.length; i++) {
       orgs = await exec('gcloud', ['organizations', 'list', '--format=json'], { timeout: 40000 });
       orgList = parse(orgs).map(toOrg).filter((o) => ORG_RE.test(o.id));
+      // the Google session has expired: gcloud cannot ask for a password here, so say so instead of retrying
+      if (!orgList.length && orgs && !orgs.ok && /reauthentication|gcloud auth login|invalid_grant/i.test(`${orgs.err || ''} ${orgs.out || ''}`)) return { signedIn: true, reauth: true, account, currentProject: '', orgs: [], billing: [], projects: [] };
       if (!orgList.length && i < 2) await new Promise((r) => setTimeout(r, 1200));
     }
     if (!orgList.length) {
@@ -58,18 +61,32 @@ exports.build = (ctx) => {
     }
     const curP = await exec('gcloud', ['config', 'get-value', 'project'], { timeout: 20000 });
     const currentProject = curP.ok ? curP.out.split(/\r?\n/).pop().trim() : '';
+    return { signedIn: true, account, currentProject, orgs: orgList, orgsDenied: !orgList.length && !!orgs && !orgs.ok };
+  }
+
+  async function discover() {
+    const base = await discoverOrgs();
+    if (!base.signedIn) return { ...base, billing: [], projects: [] };
+    const { account, currentProject, orgs: orgList, orgsDenied } = base;
+    const parse = (r) => { try { return JSON.parse(r.out || '[]'); } catch { return []; } };
     let [billing, projects] = await Promise.all([
       exec('gcloud', ['billing', 'accounts', 'list', '--filter=open=true', '--format=json'], { timeout: 40000 }),
       exec('gcloud', ['projects', 'list', '--filter=labels.managed-by=nativity-studio', '--format=json'], { timeout: 60000 }),
     ]);
     if (!parse(billing).length) { await new Promise((r) => setTimeout(r, 1200)); billing = await exec('gcloud', ['billing', 'accounts', 'list', '--filter=open=true', '--format=json'], { timeout: 40000 }); }
+    // how many projects each billing account already holds (Google limits this number)
+    const billingRows = parse(billing).map((b) => ({ id: String(b.name || '').replace('billingAccounts/', ''), name: b.displayName || b.name })).filter((b) => BILLING_RE.test(b.id));
+    for (const b of billingRows.slice(0, 3)) {
+      const l = await exec('gcloud', ['billing', 'projects', 'list', `--billing-account=${b.id}`, '--format=value(projectId)'], { timeout: 60000 });
+      b.used = l.ok ? l.out.split(/[\r\n]+/).filter((x) => x.trim()).length : null;
+    }
     return {
       signedIn: true, account, currentProject,
       orgs: orgList,
-      billing: parse(billing).map((b) => ({ id: String(b.name || '').replace('billingAccounts/', ''), name: b.displayName || b.name })).filter((b) => BILLING_RE.test(b.id)),
+      billing: billingRows,
       projects: parse(projects).map((p) => ({ id: p.projectId, app: (p.labels || {}).app || '', env: (p.labels || {}).environment || '' })),
       billingDenied: !billing.ok,
-      orgsDenied: !orgList.length && !!orgs && !orgs.ok,
+      orgsDenied,
     };
   }
 
@@ -192,5 +209,5 @@ exports.build = (ctx) => {
   }
 
   const wizard = require('./wizard').build(ctx, { APIS, DEPLOYER_ROLES, RUNTIME_ROLES, CICD_ROLES });
-  return { discover, plan, wizard };
+  return { discover, discoverOrgs, plan, wizard };
 };

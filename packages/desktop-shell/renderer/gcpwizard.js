@@ -27,6 +27,8 @@ function openGcpWizard(opts = {}) {
   gwInit(opts);
 }
 
+const gwWaitText = () => `Looking up your organizations… ${Math.round((Date.now() - (GW.discStart || Date.now())) / 1000)}s`;
+
 async function gwInit(opts) {
   GW.run = null; GW.plan = null; GW.planErr = ''; GW.ss = {}; GW.msg = '';
   const saved = (state.proj && state.proj.landing && state.proj.landing.gcp) || (state.settings.gcp && state.settings.gcp.landing) || null;
@@ -38,8 +40,15 @@ async function gwInit(opts) {
   GW.step = opts.startAt != null ? opts.startAt : 0;
   await gwLoadApps();
   gwDraw();
-  const r = await tryInv('prov:discover', 'gcp', true);
-  if (r.ok) { GW.disc = r.data; GW.discErr = ''; } else GW.discErr = r.error;
+  // organizations first (quick), so the first step is usable while billing accounts and existing projects are still being read
+  GW.discStart = Date.now(); clearInterval(GW.discTick); GW.discTick = setInterval(() => { const el = document.querySelector('.gw-wait'); if (el) el.textContent = gwWaitText(); else clearInterval(GW.discTick); }, 1000);
+  const q = await tryInv('prov:discoverOrgs', 'gcp');
+  if (q.ok) { GW.disc = { billing: [], projects: [], ...q.data }; GW.discErr = ''; GW.discPartial = true; } else GW.discErr = q.error;
+  if (GW.disc && GW.disc.signedIn !== false && GW.disc.orgs.length) { if (!GW.org && !GW.noOrg && GW.disc.orgs.length === 1) { gwPickOrg(GW.disc.orgs[0], true); } gwDraw(); }
+  if (GW.disc && GW.disc.reauth) { clearInterval(GW.discTick); GW.discPartial = false; GW.discErr = 'Your Google Cloud session has expired. Google asks you to sign in again before anything can be read or created.'; gwDraw(); return; }
+  const r = await tryInv('prov:discover', 'gcp', false);
+  clearInterval(GW.discTick); GW.discPartial = false;
+  if (r.ok) { GW.disc = r.data; GW.discErr = ''; } else if (!GW.disc) GW.discErr = r.error;
   if (GW.disc && GW.disc.signedIn === false) GW.discErr = 'Google Cloud is not signed in. Sign in from the Clouds view first.';
   if (GW.disc && !GW.org && !GW.noOrg) {
     const want = saved && saved.org ? GW.disc.orgs.find((o) => o.id === saved.org.id) : null;
@@ -80,7 +89,7 @@ async function gwLoadApps() {
     const old = prev.get(d.dir.toLowerCase());
     if (old) { names.add(old.name); return old; }
     const existing = Object.entries(known).find(([, a]) => a.dir && a.dir.toLowerCase() === d.dir.toLowerCase());
-    return { name: existing ? existing[0] : uniq(sanitizeApp(baseName(d.dir) || baseName(state.workspace))), dir: d.dir, tool: d.tool, toolName: d.toolName, include: true, mode: 'create', projects: {}, prepare: true, access: true, move: false, linked: !!existing };
+    return { name: existing ? existing[0] : uniq(sanitizeApp(baseName(d.dir) || baseName(state.workspace))), dir: d.dir, tool: d.tool, toolName: d.toolName, include: true, mode: dirs.length > 1 ? 'shared' : 'create', projects: {}, prepare: true, access: true, move: false, linked: !!existing };
   });
 }
 
@@ -161,7 +170,7 @@ function gwNav() {
   const next = h('button', { class: 'primary big', text: GW.step === 4 ? 'Provision…' : 'Next ▸', disabled: !!why || GW.planning || (GW.step === 4 && !(GW.plan && !gwBlockers().length)), title: why || '', onclick: () => gwNext() });
   return h('div', { id: 'gw-nav', class: 'gw-nav' },
     h('button', { text: '◂ Back', disabled: first || !!(GW.run && !GW.run.done), onclick: () => { GW.step = Math.max(0, GW.step - 1); gwDraw(); } }),
-    h('span', { class: 't-dim', style: 'flex:1', text: why || GW.msg || '' }),
+    h('span', { class: why ? 'gw-why' : 't-dim', style: 'flex:1', text: why || GW.msg || '' }),
     last ? null : next);
 }
 
@@ -183,6 +192,8 @@ function gwBlock() {
     if (!inc.length) return 'Select at least one application.';
     const bad = inc.find((a) => !/^[a-z][a-z0-9-]{1,19}[a-z0-9]$/.test(a.name));
     if (bad) return `"${bad.name}" is not a valid application name (3-21 characters, lower-case letters, digits, "-").`;
+    const nb = inc.flatMap((a) => (a.mode === 'existing' ? GW.envs.map((e) => a.projects[e.name]) : [])).find((id) => id && gwNoBilling(id));
+    if (nb) return `${nb} has no billing account. Link it to a billing account in Google Cloud first, or pick another project.`;
     const miss = inc.find((a) => a.mode === 'existing' && GW.envs.some((e) => !a.projects[e.name]));
     if (!miss && inc.some((a) => a.mode === 'existing' && a.move && !GW.org)) return 'Moving projects into folders needs an organization.';
     if (miss) return `${miss.name}: choose an existing project for every environment, or change how it is associated.`;
@@ -205,8 +216,8 @@ async function gwNext() {
 
 function stepOrg() {
   const d = GW.disc;
-  if (!d && !GW.discErr) return h('div', { class: 'card' }, h('p', { text: 'Looking up your organizations…' }));
-  if (GW.discErr) return h('div', { class: 'card' }, h('div', { class: 'msg err', text: GW.discErr }), h('button', { text: 'Try again', onclick: () => gwInit({ startAt: 0 }) }));
+  if (!d && !GW.discErr) return h('div', { class: 'card' }, h('p', { class: 'gw-wait', text: gwWaitText() }), h('div', { class: 'hint', text: 'Google Cloud answers slowly the first time. If this takes more than a minute, check that gcloud works in a terminal.' }), h('button', { text: 'Try again', onclick: () => gwInit({ startAt: GW.step }) }));
+  if (GW.discErr) return h('div', { class: 'card' }, h('div', { class: 'msg err', text: GW.discErr }), h('div', { class: 'row' }, GW.disc && GW.disc.reauth ? h('button', { class: 'primary', text: 'Sign in to Google Cloud', onclick: async () => { await cloudLogin('gcp'); gwInit({ startAt: 0 }); } }) : null, h('button', { text: 'Try again', onclick: () => gwInit({ startAt: 0 }) })), GW.disc && GW.disc.reauth ? h('div', { class: 'hint', text: 'A browser window opens for the sign-in. When it is done, come back here: the wizard continues by itself.' }) : null);
   const cards = d.orgs.map((o) => h('div', { class: `gw-org${GW.org && GW.org.id === o.id ? ' on' : ''}`, onclick: () => gwPickOrg(o) }, h('b', { text: o.name }), h('span', { class: 't-dim', text: `organization ${o.id}` }), GW.org && GW.org.id === o.id ? h('span', { class: 'chip ok', text: 'selected' }) : null));
   return h('div', {},
     h('p', { class: 'hint', text: 'Environments in Google Cloud are folders, and folders live inside an organization. Choose the organization to build the landing zone in: it is created once and shared by all your applications.' }),
@@ -306,8 +317,8 @@ function stepApps() {
     GW.apps.some((a) => a.mode === 'shared') ? h('div', { class: 'row' }, h('span', { class: 't-dim', text: 'Shared project name:' }), h('input', { value: GW.sharedName, style: 'max-width:200px', spellcheck: 'false', onchange: (e) => { GW.sharedName = e.target.value.trim().toLowerCase() || 'platform'; gwDrawBody(); } })) : null);
   return h('div', {},
     h('p', { class: 'hint', text: `Each application in this workspace is associated with a Google Cloud project per environment (${GW.envs.map((e) => e.name).join(', ')}). By default every application gets its own projects inside the environment folders. Open more applications later and run this step again: the landing zone is reused.` }),
-    bulk,
-    h('div', { class: 'gw-apps' }, ...GW.apps.map(gwAppRow)),
+    bulk, gwQuotaNote(),
+h('div', { class: 'gw-apps' }, ...GW.apps.map(gwAppRow)),
     h('div', { class: 'row' }, h('button', { text: '+ Add another application…', onclick: gwAddApp })));
 }
 
@@ -333,6 +344,25 @@ function existingOptions(o, redraw) {
     h('div', { class: 'hint', text: 'All three off = just link the project to this application; nothing in Google Cloud changes.' }));
 }
 
+/** Projects this plan would create, and what the billing account already holds. Google limits projects per billing account (often 5 on newer accounts; it differs), so say it early. */
+function gwQuotaNote() {
+  const inc = GW.apps.filter((a) => a.include);
+  const own = inc.filter((a) => a.mode === 'create').length * GW.envs.length;
+  const shared = inc.some((a) => a.mode === 'shared') ? GW.envs.length : 0;
+  const n = own + shared;
+  if (!n) return null;
+  const acct = ((GW.disc && GW.disc.billing) || []).find((b) => b.id === GW.billing.standard) || {};
+  const used = typeof acct.used === 'number' ? acct.used : null;
+  const tight = used != null ? used + n > 5 : n > 5;
+  return h('div', { class: `card gw-quota${tight ? ' tight' : ''}` },
+    h('b', { text: `${n} new project${n === 1 ? '' : 's'} will be linked to billing${used != null ? ` (this billing account already has ${used})` : ''}.` }),
+    h('div', { class: 'hint', text: tight ? 'Google limits how many projects one billing account can hold, often 5 on newer accounts (yours may differ). This plan can go over that. Prefer one shared project per environment, or ask Google to raise the limit. The wizard cannot read your exact limit.' : 'One shared project per environment keeps this small. Google limits projects per billing account (often 5 on newer accounts; yours may differ).' }));
+}
+
+/** Existing projects that can be used: billing must be on (unknown = allowed, the plan checks again). */
+const gwUsable = () => (GW.projects || []).filter((p) => p.billed !== false);
+const gwNoBilling = (id) => { const p = (GW.projects || []).find((x) => x.id === id); return !!p && p.billed === false; };
+
 function projectPicker(value, onPick, placeholder) {
   const list = (GW.projects || []);
   const inp = h('input', { value: value || '', list: 'gw-projects', placeholder: placeholder || 'project id', spellcheck: 'false', style: 'min-width:190px' });
@@ -346,7 +376,7 @@ async function gwBulkExisting() {
   if (!inc.length) return status('Select the applications first.', true);
   const inputs = GW.envs.map((e) => { const i = h('input', { placeholder: `project id for ${e.name}`, list: 'gw-projects', spellcheck: 'false' }); return [e, i]; });
   const opts = { prepare: true, access: true, move: false };
-  const dl = h('datalist', { id: 'gw-projects' }, ...(GW.projects || []).map((p) => h('option', { value: p.id, label: `${p.name} ${p.parent ? `· ${p.parent}` : ''}` })));
+  const dl = h('datalist', { id: 'gw-projects' }, ...gwUsable().map((p) => h('option', { value: p.id, label: `${p.name} ${p.parent ? `· ${p.parent}` : ''}` })));
   const close = modal('Link the selected applications to existing projects', h('div', {}, h('p', { class: 'hint', text: `${inc.length} application(s) will use the same project for each environment. Pick or type the project ids.` }), dl,
     ...inputs.map(([e, i]) => h('div', { class: 'row' }, h('span', { class: 'envtag', text: e.name }), i)),
     existingOptions(opts)), [
@@ -370,8 +400,9 @@ function gwAppRow(a) {
   return h('div', { class: 'gw-appbox' }, head,
     h('div', { class: 'gw-detail' },
       radio('create', 'Create a project for this application in each environment folder'), radio('shared', `Use the shared project “${GW.sharedName}” of each environment`), radio('existing', 'Use projects that already exist'),
-      a.mode === 'existing' ? h('div', {}, h('datalist', { id: 'gw-projects' }, ...(GW.projects || []).map((p) => h('option', { value: p.id, label: `${p.name} ${p.parent ? `· ${p.parent}` : ''}` }))), GW.projectsBusy ? h('div', { class: 'hint', text: 'Loading your projects…' }) : null,
+      a.mode === 'existing' ? h('div', {}, h('datalist', { id: 'gw-projects' }, ...gwUsable().map((p) => h('option', { value: p.id, label: `${p.name} ${p.parent ? `· ${p.parent}` : ''}` }))), GW.projectsBusy ? h('div', { class: 'hint', text: 'Loading your projects…' }) : null,
         ...GW.envs.map((e) => h('div', { class: 'row' }, h('span', { class: 'envtag', text: e.name }), projectPicker(a.projects[e.name], (v) => { if (v) a.projects[e.name] = v; else delete a.projects[e.name]; gwDrawBody(); }, `existing project for ${e.name}`))),
+        GW.envs.length > 1 && new Set(GW.envs.map((e) => a.projects[e.name])).size === 1 && a.projects[GW.envs[0].name] ? h('div', { class: 'hint', text: 'The same project is used for every environment, so it acts as one shared project. That is fine for a first set-up; environments are then separated by service account and labels, not by project.' }) : null,
         existingOptions(a, () => gwDrawBody())) : null));
 }
 
@@ -393,7 +424,7 @@ function stepReview() {
   if (GW.planErr) return h('div', { class: 'card' }, h('div', { class: 'msg err', text: GW.planErr }));
   const pc = GW.plan.clouds[0];
   return h('div', {},
-    h('h3', { text: pc.architecture.title }), h('p', { class: 'summary', text: pc.architecture.summary }),
+    h('h3', { text: pc.architecture.title }), h('p', { class: 'summary', text: pc.architecture.summary }), topologyNote(GW.apps.some((a) => a.include && a.tool)),
     ...(pc.blockers || []).map((b) => h('div', { class: 'msg err', text: `⛔ ${b}` })), ...(pc.warnings || []).map((w) => h('div', { class: 'msg warn', text: `⚠ ${w}` })),
     h('div', { class: 'archwrap' }, drawArchitecture(pc.architecture, '#4285f4')),
     h('div', { class: 'cols2' },
@@ -422,9 +453,27 @@ function gwConfirm() {
 async function gwStart(typed) {
   const r = await tryInv('prov:run', GW.plan.token, typed);
   if (!r.ok) return status(r.error, true);
-  GW.run = { id: r.data.runId, done: false, ok: 0, failed: 0, results: [], error: '' };
+  GW.run = { id: r.data.runId, done: false, ok: 0, failed: 0, results: [], error: '', t0: Date.now(), now: '' };
+  clearInterval(GW.tick); GW.tick = setInterval(gwTick, 1000);
   GW.ss = {}; LD.ss = GW.ss; GW.step = 5;
   gwDraw();
+}
+
+/** Elapsed time, estimated time left and the step that is running right now, refreshed every second. */
+const gwFmt = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function gwTick() {
+  const r = GW.run, el = document.querySelector('.runnow');
+  if (!r || r.done) { clearInterval(GW.tick); if (el) el.textContent = ''; return; }
+  if (!el) return;
+  const total = GW.plan ? GW.plan.totalSteps : 0, did = r.ok + r.failed, ms = Date.now() - r.t0;
+  const left = did > 1 && total > did ? ` · about ${gwFmt((ms / did) * (total - did))} left` : '';
+  el.textContent = `Step ${Math.min(did + 1, total)} of ${total}: ${r.now || 'starting…'}  (${gwFmt(ms)} elapsed${left})`;
+}
+
+function gwGroupCounts(pc) {
+  const m = new Map();
+  for (const x of pc.steps) { const k = (x.group === 'folders' ? 'folders' : x.group || 'all') + (x.env ? ` · ${x.env}` : ''); const o = m.get(k) || { n: 0, d: 0, f: 0 }; o.n++; const st = (GW.ss[`${pc.id}|${x.id}`] || {}).status; if (['ok', 'skipped', 'warn'].includes(st)) o.d++; if (st === 'failed') o.f++; m.set(k, o); }
+  return m;
 }
 
 function stepRun() {
@@ -438,6 +487,8 @@ function stepRun() {
     h('div', { class: 'card runcard' },
       h('div', { class: 'cardh' }, h('b', { text: r.done ? (r.failed || r.error ? 'Finished with problems' : 'Landing zone ready') : 'Provisioning…' }), h('span', { class: 'spacer' }), r.done ? null : h('button', { text: 'Stop after this step', onclick: () => tryInv('prov:cancel', r.id) })),
       h('div', { class: 'progress' }, h('div', { class: `bar${r.failed ? ' bad' : ''}`, style: `width:${pct}%` })),
+      h('div', { class: 'runnow', text: r.done ? '' : 'Starting…' }),
+      h('div', { class: 'rungroups' }, ...[...gwGroupCounts(pc).entries()].map(([k, o]) => h('span', { class: `chip${o.f ? ' bad' : o.d === o.n ? ' ok' : ''}`, 'data-g': k, text: `${k}: ${o.d}/${o.n}` }))),
       h('div', { class: 't-dim', text: `${r.ok + r.failed} of ${total} steps done${r.failed ? `, ${r.failed} failed` : ''}.` }), r.error ? h('div', { class: 'msg err', text: r.error }) : null),
     result, stepList(pc));
 }
@@ -449,6 +500,7 @@ function gwResult(pc) {
   const rows = Object.entries(rec.apps).map(([name, a]) => h('tr', {}, h('td', { class: 'who', text: name }), ...GW.envs.map((e) => { const t = (a.targets || {})[e.name]; return h('td', {}, t ? h('a', { href: '#', class: 'md-a', title: 'Open in the Cloud Console', text: t.scope, onclick: (ev) => { ev.preventDefault(); inv('shell:openExternal', `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(t.scope)}`).catch(() => {}); } }) : '—', done.has(name) ? null : h('span', { class: 't-err', text: ' ?' })); })));
   const ok = GW.run.done && !GW.run.failed && !GW.run.error;
   return h('div', { class: 'card' },
+    topologyNote(GW.apps.some((a) => a.include && a.tool)),
     h('b', { text: 'Where each application lives' }),
     h('table', { class: 'acc' }, h('tr', {}, h('td', { class: 'who', text: 'Application' }), ...GW.envs.map((e) => h('td', { class: 'who', text: e.name }))), ...rows),
     h('div', { class: 'hint', text: 'Saved in .nativity/project.json. Pick the application and environment in the Clouds view; the IDE then uses that project and impersonates its deployer account.' }),
@@ -467,8 +519,12 @@ cns.on('prov:event', (ev) => {
       row.querySelector('.smsg').textContent = ev.message || '';
       if (ev.status === 'failed' || ev.status === 'running') { const det = row.closest('details'); if (det) det.open = true; row.scrollIntoView({ block: 'nearest' }); }
     }
+    if (ev.status === 'running') { const st = GW.plan.clouds[0].steps.find((x) => x.id === ev.step); r.now = st ? st.title : ev.step; }
     if (['ok', 'skipped', 'warn'].includes(ev.status)) r.ok++;
     if (ev.status === 'failed') r.failed++;
+    gwTick();
+    const gc = gwGroupCounts(GW.plan.clouds[0]);
+    document.querySelectorAll('.rungroups .chip').forEach((c) => { const o = gc.get(c.dataset.g); if (o) { c.textContent = `${c.dataset.g}: ${o.d}/${o.n}`; c.classList.toggle('ok', o.d === o.n); c.classList.toggle('bad', !!o.f); } });
     const bar = document.querySelector('.runcard .bar');
     if (bar && GW.plan.totalSteps) { bar.style.width = `${Math.round(((r.ok + r.failed) / GW.plan.totalSteps) * 100)}%`; bar.classList.toggle('bad', r.failed > 0); }
   } else if (ev.type === 'done') {
