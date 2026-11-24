@@ -420,6 +420,7 @@ function projectMenuItems() {
     const s = state.cloudStatus[p.cloud] || {};
     items.push('-',
       { label: 'Architecture & Provision Environments…', run: openLanding },
+      { label: 'Cloud Native architecture wizard (services, network, Terraform)…', run: () => openArchWizard() },
       { label: 'Google Cloud set-up wizard…', run: () => openGcpWizard() },
       { label: 'Associate applications with Google Cloud projects…', run: () => openGcpWizard({ startAt: 3 }) },
       { label: 'Run CI/CD Pipeline', run: runPipeline, disabled: !ready },

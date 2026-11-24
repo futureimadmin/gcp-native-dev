@@ -38,10 +38,10 @@ function initMonaco() {
           'editorBracketHighlight.foreground1': '#ffd166', 'editorBracketHighlight.foreground2': '#c792ea', 'editorBracketHighlight.foreground3': '#4fc3f7', 'editorBracketHighlight.foreground4': '#9ece6a', 'editorBracketHighlight.foreground5': '#ff9e64', 'editorBracketHighlight.foreground6': '#f7768e',
         },
       });
+      defineAppearanceThemes();
       editor = monaco.editor.create($('editor'), {
-        theme: 'cns-dark', automaticLayout: true, minimap: { enabled: true },
-        fontFamily: 'Monospaced, "Courier New", monospace', // NetBeans default editor font
-        fontSize: (state.settings.editor && state.settings.editor.fontSize) || 13, model: null,
+        ...editorOptionsFromAppearance(), // NetBeans defaults unless Settings > Appearance says otherwise
+        theme: monacoThemeFor(resolveTheme(appearance().theme)), automaticLayout: true, model: null,
       }, {
         openCodeEditor: async (input, source) => {
           const sel = input.options && input.options.selection;

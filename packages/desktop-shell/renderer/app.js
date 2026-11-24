@@ -68,6 +68,7 @@ function registerCommands() {
   const C = (id, fn, title) => CNS.command(id, fn, title);
   C('workspace.show', () => showHome(), 'Workspace: Show home');
   C('project.new', newProjectDialog, 'File: New Project…');
+  C('cloud.architecture', () => openArchWizard(), 'Cloud: Architecture wizard (services, network, Terraform)');
   C('file.new', () => createEntry(false), 'File: New File');
   C('folder.open', openFolderDialog, 'File: Open Folder…');
   C('recent.open', (p) => openFolder(p));
@@ -152,6 +153,7 @@ function wireToolbar() {
 async function main() {
   try {
     state.settings = await inv('settings:get');
+    applyAppearance(); // colours and fonts before anything is drawn
     state.info = await inv('app:info');
     state.plugins = await inv('host:plugins');
     await loadClouds();

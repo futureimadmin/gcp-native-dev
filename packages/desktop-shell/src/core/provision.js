@@ -133,6 +133,30 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
     return { token, envs: plan.envs, protectedEnvs: plan.envs.filter((e) => e.protected).map((e) => e.name), clouds: [view], totalSteps: plan.steps.length };
   }));
 
+  /* ---------- architecture (services, network, identities, Terraform) ---------- */
+
+  const archOf = (cloudId) => { const p = prov(cloudId); if (!p.provision.arch) throw new Error(`${p.name} has no architecture wizard yet.`); return p; };
+  ipcMain.handle('prov:archCatalog', wrap(async (cloudId) => archOf(cloudId).provision.arch.catalog()));
+  ipcMain.handle('prov:archPreview', wrap(async (cloudId, spec) => archOf(cloudId).provision.arch.preview(spec)));
+
+  ipcMain.handle('prov:archPlan', wrap(async (ws, cloudId, spec) => {
+    const p = archOf(cloudId);
+    const disc = await discover(cloudId, false);
+    if (!disc || disc.signedIn === false) throw new Error(`${p.name} is not connected. Sign in first.`);
+    const plan = await p.provision.arch.plan(spec, disc, ws);
+    for (const s of plan.steps) {
+      if (!s.id || !s.cmd || !Array.isArray(s.args)) throw new Error(`${p.name} produced an invalid step.`);
+      s.display = s.writeFile ? `write ${s.writeFile.path}` : commandLine(s.cmd, s.args);
+      if (s.check) s.checkDisplay = commandLine(s.check.cmd, s.check.args);
+    }
+    const token = crypto.randomUUID();
+    const cloud = { id: cloudId, name: p.name, short: p.short || p.name, color: p.color, ...plan };
+    plans.set(token, { ws, app: '(architecture)', envs: plan.envs, clouds: [cloud] });
+    setTimeout(() => plans.delete(token), 30 * 60 * 1000).unref();
+    const view = { ...cloud, steps: plan.steps.map(({ id, env, group, title, display, checkDisplay, optional, writeFile }) => ({ id, env: env || '', group: group || '', title, display, checkDisplay: checkDisplay || '', optional: !!optional, writes: writeFile ? writeFile.path : '' })) };
+    return { token, envs: plan.envs, protectedEnvs: plan.envs.filter((e) => e.protected).map((e) => e.name), clouds: [view], totalSteps: plan.steps.length };
+  }));
+
   /* ---------- run ---------- */
 
   const fill = (s, vars) => String(s).replace(/\{\{(\w+)\}\}/g, (_m, k) => {

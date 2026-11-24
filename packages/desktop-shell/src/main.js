@@ -385,7 +385,7 @@ function registerCoreIpc() {
 
   ipcMain.handle('settings:get', wrap(async () => store.all()));
   ipcMain.handle('settings:set', wrap(async (key, val) => {
-    if (!/^(editor|startup|ui|cloud|workspace|envOverrides|run)(\.|$)/.test(key)) throw new Error('That setting cannot be changed from the UI.');
+    if (!/^(editor|appearance|startup|ui|cloud|workspace|envOverrides|run)(\.|$)/.test(key)) throw new Error('That setting cannot be changed from the UI.');
     store.set(key, val);
   }));
   ipcMain.handle('secret:available', wrap(async () => secrets.available()));
@@ -408,6 +408,12 @@ function registerCoreIpc() {
     await shell.openPath(dir);
   }));
   ipcMain.handle('plugin:invoke', wrap(async (id, channel, args) => host.invoke(id, channel, args)));
+
+  ipcMain.handle('app:setZoom', wrap(async (f) => {
+    const n = Number(f);
+    if (!Number.isFinite(n) || n < 0.5 || n > 2) throw new Error('Invalid zoom.');
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.setZoomFactor(n);
+  }));
 
   ipcMain.handle('app:info', wrap(async () => ({
     version: app.getVersion(), platform: process.platform, userData: app.getPath('userData'),

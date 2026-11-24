@@ -14,7 +14,7 @@ const HELP = [
       'AWS, Azure and Kubernetes are checked in the background. Each cloud you are signed in to appears as a coloured dot in the toolbar.',
       'The first screen is the Workspace: create a project, open a folder, import from GitHub, or pick a recent project.'),
     H2('A first session'),
-    UL('File > New Project, choose a template (for example Spring Boot or React) and a folder.',
+    UL('File > New Project. The first entry, Cloud Native Project, is the recommended start: pick a stack, a cloud and the environments (you work in the first, the others are deployment targets). The IDE creates the code with a Dockerfile and a GitHub Actions pipeline that builds once and promotes the same image through the environments, binds the project to the cloud, and opens the cloud set-up. Nothing is created in the cloud until you press Provision. The other entries are plain templates (for example Spring Boot or React).',
       'Press the green Run button (or F5). The IDE detected how the project builds; the Run configuration box in the toolbar shows what it found.',
       'Open the Clouds view, sign in, and pick a project or account. Services you may use are listed; click one to open it inside the IDE.',
       'Right-click the project folder > Enable Cloud Native Development to deploy and run pipelines.'),

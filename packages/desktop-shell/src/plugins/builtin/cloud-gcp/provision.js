@@ -209,5 +209,6 @@ exports.build = (ctx) => {
   }
 
   const wizard = require('./wizard').build(ctx, { APIS, DEPLOYER_ROLES, RUNTIME_ROLES, CICD_ROLES });
-  return { discover, discoverOrgs, plan, wizard };
+  const arch = require('./arch').build(ctx);
+  return { discover, discoverOrgs, plan, wizard, arch };
 };

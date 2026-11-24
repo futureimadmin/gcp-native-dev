@@ -175,7 +175,7 @@ CNS.plugin('cns.build-tools', (api) => {
   function drawGoals() {
     if (!B.ui) return;
     const info = B.info;
-    if (!info || info.error) { B.ui.goals.replaceChildren(info && info.error ? h('div', { class: 'msg err bld-kv', text: info.error }) : null); return; }
+    if (!info || info.error) { B.ui.goals.replaceChildren(...(info && info.error ? [h('div', { class: 'msg err bld-kv', text: info.error })] : [])); return; }
     const goals = info.goals || [];
     const rec = goals.filter((g) => g.rec).slice(0, 10);
     const groups = new Map();

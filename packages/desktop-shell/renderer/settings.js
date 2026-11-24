@@ -7,7 +7,7 @@ async function openSettings(tab) {
   const nav = h('div', { class: 'snav' });
   const pane = h('div', { class: 'spane' });
   body.append(nav, pane);
-  const tabs = { general: ['General', generalPane], runtimes: ['Runtimes', runtimesPane], clouds: ['Clouds', cloudsPane], ai: ['AI', aiPane], plugins: ['Plugins', pluginsPane], about: ['About', aboutPane] };
+  const tabs = { general: ['General', generalPane], appearance: ['Appearance', appearancePane], runtimes: ['Runtimes', runtimesPane], clouds: ['Clouds', cloudsPane], ai: ['AI', aiPane], plugins: ['Plugins', pluginsPane], about: ['About', aboutPane] };
   let current = 'general';
   let open = true;
   const close = modal('Settings', body, [h('button', { class: 'primary', text: 'Done', onclick: () => { open = false; close(); renderAiPanel(); renderHome(); } })], { wide: true });
@@ -52,7 +52,6 @@ function generalPane() {
   const toastBox = h('input', { type: 'checkbox', checked: adv.toasts !== false });
   toastBox.onchange = () => advSave('toasts', toastBox.checked);
   return h('div', {}, h('h3', { text: 'General' }),
-    h('label', { text: 'Editor font size' }), size,
     h('label', { text: 'Auto-save' }), mode,
     h('label', { class: 'inline' }, check, ' Check Java for compile errors in the background (red mark in the margin, listed in PROBLEMS)'),
     h('label', { text: 'Check Java' }), delay,

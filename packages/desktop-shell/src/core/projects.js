@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { exec } = require('./util');
+const { pipelineFiles } = require('./pipeline');
 
 const NAME_OK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const HTTPS = /^https:\/\/[A-Za-z0-9.-]+\/[A-Za-z0-9._~/-]+$/;
@@ -20,10 +21,12 @@ const repoName = (url) => url.replace(/\.git$/, '').split(/[/:]/).filter(Boolean
 
 function register({ ipcMain, wrap, host, send, store }) {
   ipcMain.handle('project:templates', wrap(async () => host.templates.map((t) => ({
-    id: t.id, name: t.name, description: t.description || '', cloud: t.cloud || 'any', language: t.language || '', scaffold: !!t.scaffold,
+    id: t.id, name: t.name, description: t.description || '', cloud: t.cloud || 'any', language: t.language || '', scaffold: !!t.scaffold, form: t.form || '',
+    // a template that ships a Dockerfile can be a Cloud Native project (it runs the same way in every environment)
+    container: !t.scaffold && (() => { try { return Object.keys(t.files('app', { groupId: 'org.sample', modulePath: 'github.com/sample/app' })).some((f) => /^Dockerfile$/i.test(f)); } catch { return false; } })(),
   }))));
 
-  ipcMain.handle('project:create', wrap(async ({ parentDir, name, template, gitInit }) => {
+  ipcMain.handle('project:create', wrap(async ({ parentDir, name, template, gitInit, cloudNative, options }) => {
     if (!NAME_OK.test(String(name))) throw new Error('Project name: letters, digits, ".", "_" or "-" (max 100).');
     const t = host.templates.find((x) => x.id === template);
     if (!t) throw new Error('Unknown template.');
@@ -32,9 +35,10 @@ function register({ ipcMain, wrap, host, send, store }) {
     if (fs.existsSync(dir) && fs.readdirSync(dir).length) throw new Error(`"${dir}" already exists and is not empty.`);
     if (t.scaffold) {
       // The framework's own CLI creates the project; the UI runs this exact command in the terminal panel.
-      return { dir, git: false, cloud: t.cloud || 'any', scaffold: String(t.scaffold(name)), parentDir };
+      return { dir, git: false, cloud: t.cloud || 'any', scaffold: String(t.scaffold(name, options || {})), parentDir };
     }
-    const files = t.files(name);
+    const files = { ...t.files(name, options || {}) };
+    if (cloudNative && cloudNative.pipeline) Object.assign(files, pipelineFiles({ cloud: cloudNative.cloud, envs: cloudNative.envs, name }));
     const entries = Object.entries(files);
     if (!entries.length || entries.length > 200) throw new Error('Template produced an invalid file set.');
     for (const [rel, content] of entries) {

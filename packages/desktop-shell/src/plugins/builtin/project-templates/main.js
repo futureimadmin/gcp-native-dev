@@ -9,30 +9,49 @@ const readme = (name, body) => `# ${name}\n\n${body}\n\nCreated with Nativity St
 exports.activate = (ctx) => {
   require('./more').register(ctx);
 
+  // Node and Python take a package name from the dialog (form: 'node' / 'python') and start with a real folder layout.
   ctx.templates.register({
-    id: 'node-container', name: 'Node.js web service (container)', language: 'JavaScript', cloud: 'any',
-    description: 'Express service with /healthz and a Dockerfile. Runs on Cloud Run, ECS/App Runner, Azure Container Apps or Kubernetes.',
-    files: (name) => ({
-      'package.json': json({ name: slug(name), version: '1.0.0', main: 'server.js', scripts: { start: 'node server.js' }, dependencies: { express: '^4.19.2' } }),
-      'server.js': "const express = require('express');\nconst app = express();\n\napp.get('/healthz', (_req, res) => res.json({ status: 'ok' }));\napp.get('/', (_req, res) => res.send('Hello from Nativity Studio'));\n\nconst port = process.env.PORT || 8080;\napp.listen(port, () => console.log(`listening on ${port}`));\n",
-      Dockerfile: 'FROM node:22-slim\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev\nCOPY . .\nENV PORT=8080\nEXPOSE 8080\nUSER node\nCMD ["node", "server.js"]\n',
-      '.dockerignore': 'node_modules\n.git\n.env\n',
-      '.gitignore': GITIGNORE,
-      'README.md': readme(name, 'Node.js (Express) service.\n\n```\nnpm install\nnpm start\n```'),
-    }),
+    id: 'node-container', name: 'Node.js web service (container)', language: 'JavaScript', cloud: 'any', form: 'node',
+    description: 'Express service with routes, services, /healthz and a Dockerfile. Runs on Cloud Run, ECS/App Runner, Azure Container Apps or Kubernetes.',
+    files: (name, opts) => {
+      const pkg = String((opts && opts.packageName) || slug(name)).trim();
+      if (!/^(@[a-z0-9~-][a-z0-9._~-]*\/)?[a-z0-9~-][a-z0-9._~-]*$/.test(pkg)) throw new Error('Package name: lower-case letters, digits, "-", "." or "_", optionally with a scope like @acme/orders.');
+      return {
+        'package.json': json({ name: pkg, version: '1.0.0', private: true, main: 'src/server.js', scripts: { start: 'node src/server.js', dev: 'node --watch src/server.js' }, engines: { node: '>=20' }, dependencies: { express: '^4.19.2' } }),
+        'src/server.js': "const express = require('express');\nconst health = require('./routes/health');\nconst hello = require('./routes/hello');\n\nconst app = express();\napp.use('/healthz', health);\napp.use('/', hello);\n\nconst port = process.env.PORT || 8080;\napp.listen(port, () => console.log(`listening on ${port}`));\n",
+        'src/routes/health.js': "const { Router } = require('express');\n\nconst router = Router();\nrouter.get('/', (_req, res) => res.json({ status: 'ok' }));\n\nmodule.exports = router;\n",
+        'src/routes/hello.js': "const { Router } = require('express');\nconst { greet } = require('../services/greeting');\n\nconst router = Router();\nrouter.get('/', (_req, res) => res.send(greet()));\n\nmodule.exports = router;\n",
+        'src/services/greeting.js': "function greet() {\n  return 'Hello from Nativity Studio';\n}\n\nmodule.exports = { greet };\n",
+        Dockerfile: 'FROM node:22-slim\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev\nCOPY . .\nENV PORT=8080\nEXPOSE 8080\nUSER node\nCMD ["node", "src/server.js"]\n',
+        '.dockerignore': 'node_modules\n.git\n.env\n',
+        '.gitignore': GITIGNORE,
+        'README.md': readme(name, `Node.js (Express) service \`${pkg}\`.\n\n\`\`\`\nnpm install\nnpm start\n\`\`\``),
+      };
+    },
   });
 
   ctx.templates.register({
-    id: 'python-container', name: 'Python FastAPI service (container)', language: 'Python', cloud: 'any',
-    description: 'FastAPI app with /healthz and a Dockerfile.',
-    files: (name) => ({
-      'requirements.txt': 'fastapi>=0.110\nuvicorn[standard]>=0.29\n',
-      'main.py': "from fastapi import FastAPI\n\napp = FastAPI()\n\n\n@app.get('/healthz')\ndef healthz():\n    return {'status': 'ok'}\n\n\n@app.get('/')\ndef index():\n    return {'message': 'Hello from Nativity Studio'}\n",
-      Dockerfile: 'FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nENV PORT=8080\nEXPOSE 8080\nRUN useradd -m app\nUSER app\nCMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]\n',
-      '.dockerignore': '.venv\n__pycache__\n.git\n.env\n',
-      '.gitignore': GITIGNORE,
-      'README.md': readme(name, 'FastAPI service.\n\n```\npip install -r requirements.txt\nuvicorn main:app --reload\n```'),
-    }),
+    id: 'python-container', name: 'Python FastAPI service (container)', language: 'Python', cloud: 'any', form: 'python',
+    description: 'FastAPI app in its own Python package with routes, services, a test, /healthz and a Dockerfile.',
+    files: (name, opts) => {
+      const pkg = String((opts && opts.pythonPackage) || String(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')).trim();
+      if (!/^[a-z_][a-z0-9_]*$/.test(pkg) || ['test', 'tests', 'app', 'main', 'src'].includes(pkg)) throw new Error('Python package: lower-case letters, digits and "_", starting with a letter, and not test, tests, app, main or src.');
+      return {
+        'requirements.txt': 'fastapi>=0.110\nuvicorn[standard]>=0.29\n',
+        'requirements-dev.txt': '-r requirements.txt\npytest>=8\nhttpx>=0.27\n',
+        [`${pkg}/__init__.py`]: '',
+        [`${pkg}/main.py`]: `from fastapi import FastAPI\n\nfrom ${pkg}.api.routes import router\n\napp = FastAPI(title="${pkg}")\napp.include_router(router)\n`,
+        [`${pkg}/api/__init__.py`]: '',
+        [`${pkg}/api/routes.py`]: `from fastapi import APIRouter\n\nfrom ${pkg}.services.greeting import greet\n\nrouter = APIRouter()\n\n\n@router.get("/healthz")\ndef healthz():\n    return {"status": "ok"}\n\n\n@router.get("/")\ndef index():\n    return {"message": greet()}\n`,
+        [`${pkg}/services/__init__.py`]: '',
+        [`${pkg}/services/greeting.py`]: 'def greet() -> str:\n    return "Hello from Nativity Studio"\n',
+        'tests/test_health.py': `from fastapi.testclient import TestClient\n\nfrom ${pkg}.main import app\n\n\ndef test_healthz():\n    assert TestClient(app).get("/healthz").json() == {"status": "ok"}\n`,
+        Dockerfile: `FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY ${pkg} ./${pkg}\nENV PORT=8080\nEXPOSE 8080\nRUN useradd -m app\nUSER app\nCMD ["sh", "-c", "uvicorn ${pkg}.main:app --host 0.0.0.0 --port $PORT"]\n`,
+        '.dockerignore': '.venv\n__pycache__\n.git\n.env\ntests\n',
+        '.gitignore': GITIGNORE,
+        'README.md': readme(name, `FastAPI service, package \`${pkg}\`.\n\n\`\`\`\npip install -r requirements-dev.txt\nuvicorn ${pkg}.main:app --reload\npytest\n\`\`\``),
+      };
+    },
   });
 
   ctx.templates.register({
