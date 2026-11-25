@@ -46,11 +46,11 @@ function renderMarkdown(text, opts = {}) {
       }
       if (c === '<') {
         const m = /^<(https?:\/\/[^>\s]+)>/.exec(src.slice(i));
-        if (m) { flush(); out.push(link(m[1], m[1])); i += m[0].length; continue; }
+        if (m) { flush(); out.push(link(m[1], m[1], undefined, true)); i += m[0].length; continue; }
       }
       if (c === 'h' && /^https?:\/\//.test(src.slice(i, i + 8)) && (i === 0 || /[\s(]/.test(src[i - 1]))) {
         const m = /^https?:\/\/[^\s<>)\]]+[^\s<>)\].,;:!?'"]/.exec(src.slice(i));
-        if (m) { flush(); out.push(link(m[0], m[0])); i += m[0].length; continue; }
+        if (m) { flush(); out.push(link(m[0], m[0], undefined, true)); i += m[0].length; continue; }
       }
       if ((c === '*' || c === '_') && src[i + 1] === c) {
         const m = find(new RegExp(`\\${c}\\${c}(?=\\S)([\\s\\S]*?\\S)\\${c}\\${c}`, 'y'), i);
@@ -71,8 +71,8 @@ function renderMarkdown(text, opts = {}) {
     return out;
   }
 
-  function link(label, url, title) {
-    const kids = inline(label);
+  function link(label, url, title, plain) {
+    const kids = plain ? [document.createTextNode(label)] : inline(label); // an autolink shows its own text (rendering it again would find the same URL, forever)
     const a = A('a', { class: 'md-a', title: title || url });
     a.append(...(kids.length ? kids : [document.createTextNode(url)]));
     a.addEventListener('click', (e) => {

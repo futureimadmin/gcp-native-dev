@@ -30,7 +30,12 @@ function mdRender() {
   const t = state.active;
   if (!MDV.view || !t || t.kind !== 'file' || !isMdPath(t.path)) return;
   const keep = MDV.view.scrollTop;
-  MDV.view.replaceChildren(renderMarkdown(t.model.getValue(), { dir: dirName(t.path), onOpen: (rel) => mdOpenRelative(t.path, rel) }));
+  try {
+    MDV.view.replaceChildren(renderMarkdown(t.model.getValue(), { dir: dirName(t.path), onOpen: (rel) => mdOpenRelative(t.path, rel) }));
+  } catch (e) {
+    // never a blank page: say what happened and offer the text editor
+    MDV.view.replaceChildren(h('div', { class: 'md-fail' }, h('b', { text: 'This Markdown file could not be shown as a preview.' }), h('div', { class: 'hint', text: `${e.message}. Use Edit to read the text.` })));
+  }
   MDV.view.scrollTop = keep;
 }
 
