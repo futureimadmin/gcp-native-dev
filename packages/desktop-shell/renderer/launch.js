@@ -21,70 +21,21 @@ function describeStatus(c, s) {
   return `${c.name} · ${c.id === 'gcp' ? 'no Application Default Credentials found' : 'not signed in'}`;
 }
 
+/** Start-up work, silently: the cloud checks run in the background and nothing about them is shown. */
 async function runLaunch() {
-  const overlay = $('launch');
-  overlay.classList.remove('hidden');
-  $('launch-steps').replaceChildren();
-  $('launch-actions').replaceChildren();
-
-  launchRow('plugins', `Plugins loaded: ${state.plugins.filter((p) => p.enabled).length}`, 'ok');
-  for (const c of state.clouds) launchRow(c.id, c.id === 'gcp' ? 'Checking Google Cloud Application Default Credentials…' : `Checking ${c.name}…`);
-
-  const checks = state.clouds.map((c) => refreshCloud(c.id).then((s) => { launchRow(c.id, describeStatus(c, s), s.signedIn ? 'ok' : 'off'); return s; }));
-
-  // Only Google Cloud gates startup (bounded wait); the other clouds fill in the toolbar pills as they finish.
+  $('launch').classList.add('hidden');
+  const checks = state.clouds.map((c) => refreshCloud(c.id).catch(() => null));
+  // Google Cloud gets a few seconds; the others fill the toolbar pills whenever they finish
   const gcpIdx = state.clouds.findIndex((c) => c.id === 'gcp');
-  if (gcpIdx >= 0) {
-    const gcp = await Promise.race([checks[gcpIdx], new Promise((r) => setTimeout(() => r(null), 30000))]);
-    const askLogin = !state.settings.startup || state.settings.startup.promptLogin !== false;
-    if (gcp && !gcp.signedIn && askLogin) await promptGcpLogin(gcp);
-  }
-
-  launchRow('services', 'Launching services…');
+  const gcp = gcpIdx >= 0 ? await Promise.race([checks[gcpIdx], new Promise((r) => setTimeout(() => r(null), 4000))]) : null;
   await loadAi();
-  launchRow('services', 'Services ready', 'ok');
-  overlay.classList.add('fade');
-  setTimeout(() => { overlay.classList.add('hidden'); overlay.classList.remove('fade'); }, 250);
+  // not signed in to Google Cloud: ask once the IDE is on screen (never during the splash)
+  const askLogin = !state.settings.startup || state.settings.startup.promptLogin !== false;
+  if (gcpIdx >= 0 && askLogin) checks[gcpIdx].then((g) => { if (g && !g.signedIn && g.installed !== false) setTimeout(() => offerGcpLogin(), 2500); });
 }
 
-function promptGcpLogin(gcp) {
-  return new Promise((resolve) => {
-    const c = cloudMeta('gcp');
-    const msg = h('div', { class: 'msg' });
-    const logBox = h('pre', { class: 'hidden progress' });
-    const actions = $('launch-actions');
-    const done = () => { off(); actions.replaceChildren(); resolve(); };
-    const off = cns.on('cloud:event', async ({ provider, evt, payload }) => {
-      if (provider !== 'gcp') return;
-      if (evt === 'log') { logBox.classList.remove('hidden'); logBox.textContent += payload; logBox.scrollTop = logBox.scrollHeight; }
-      if (evt === 'done') {
-        const s = await refreshCloud('gcp');
-        launchRow('gcp', describeStatus(c, s), s.signedIn ? 'ok' : 'warn');
-        if (s.signedIn) done();
-        else { msg.className = 'msg err'; msg.textContent = 'Sign-in did not complete. You can try again or skip.'; signBtn.disabled = false; }
-      }
-    });
-    const signBtn = h('button', { class: 'primary', text: 'Sign in with Google', onclick: async () => {
-      signBtn.disabled = true;
-      msg.className = 'msg';
-      msg.textContent = 'Opening your browser… complete the Google sign-in, then return here.';
-      const r = await tryInv('cloud:call', 'gcp', 'login', []);
-      if (!r.ok) { msg.className = 'msg err'; msg.textContent = r.error; signBtn.disabled = false; }
-    } });
-
-    launchRow('gcp', 'Google Cloud · sign-in needed', 'warn');
-    if (gcp.installed === false) {
-      actions.replaceChildren(h('div', { class: 'lcard' },
-        h('b', { text: 'Google Cloud CLI not found' }),
-        h('p', { class: 'hint', text: 'No Application Default Credentials were found and the gcloud CLI is not installed. Install it to sign in, or skip and use another cloud.' }),
-        h('div', { class: 'row' }, h('button', { class: 'primary', text: 'Open install page', onclick: () => inv('shell:openExternal', c.installUrl).catch(() => {}) }), h('button', { text: 'Continue without Google Cloud', onclick: done }))));
-      return;
-    }
-    actions.replaceChildren(h('div', { class: 'lcard' },
-      h('b', { text: 'Sign in to Google Cloud' }),
-      h('p', { class: 'hint', text: 'Application Default Credentials were not found on this computer. Sign in so the IDE can use your Google Cloud projects.' }),
-      h('div', { class: 'row' }, signBtn, h('button', { text: 'Skip for now', onclick: done }),
-        h('button', { class: 'subtle', text: 'Don’t ask again', onclick: async () => { await tryInv('settings:set', 'startup.promptLogin', false); state.settings.startup = { ...(state.settings.startup || {}), promptLogin: false }; done(); } })),
-      msg, logBox));
-  });
+function offerGcpLogin() {
+  if (document.getElementById('lic-screen')) return setTimeout(offerGcpLogin, 4000); // never on top of the license screen
+  const close = modal('Sign in to Google Cloud?', h('p', { class: 'hint', text: 'Sign in to use Google Cloud projects, billing and provisioning from the IDE. You can also do this later from the Clouds view.' }),
+    [h('button', { text: 'Not now', onclick: () => close() }), h('button', { class: 'primary', text: 'Sign in', onclick: () => { close(); cloudLogin('gcp'); } })]);
 }

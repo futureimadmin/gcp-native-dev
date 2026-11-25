@@ -86,6 +86,23 @@ async function ensureExternal(name, parsed, file) {
   return p;
 }
 
+/** Classes and annotations from the module's dependency jars (Spring, Quarkus, Jakarta, Lombok, JUnit ...), asked of the main process. */
+const CPT = new Map();
+async function classpathTypes(model, prefix, annotation) {
+  const tab = state.tabs.find((t) => t.model === model);
+  const file = (tab && tab.path) || (model.uri && model.uri.fsPath) || '';
+  if (!file || !state.workspace) return [];
+  const key = `${file}|${prefix}|${annotation}`;
+  const hit = CPT.get(key);
+  if (hit && Date.now() - hit.at < 60000) return hit.types;
+  const r = await tryInv('java:types', state.workspace, { file, prefix, annotation });
+  const types = r.ok && r.data ? r.data.types : [];
+  CPT.set(key, { at: Date.now(), types });
+  if (CPT.size > 300) CPT.delete(CPT.keys().next().value);
+  return types;
+}
+const JDK_ANNOTATIONS = ['Override', 'Deprecated', 'SuppressWarnings', 'FunctionalInterface', 'SafeVarargs'];
+
 /** All members visible on a type, including inherited ones. statics: true = only static ones, false = only instance. */
 function collectMembers(typeName, parsed) {
   const out = [];
@@ -242,7 +259,7 @@ function registerJavaCompletion() {
   const K = monaco.languages.CompletionItemKind;
   const R = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
   monaco.languages.registerCompletionItemProvider('java', {
-    triggerCharacters: ['.'],
+    triggerCharacters: ['.', '@'],
     provideCompletionItems: (model, position) => javaProvide(model, position, K, R),
   });
 }
@@ -300,6 +317,25 @@ async function javaProvide(model, position, K, R) {
         return { suggestions };
       }
 
+      // after "@": the annotations of your project, the JDK and every dependency (with the import)
+      if (word.word.startsWith('@') || (word.startColumn > 1 && lineText[word.startColumn - 2] === '@')) {
+        // the editor counts the "@" as part of the word: only what follows it is replaced
+        const lead = word.word.startsWith('@') ? 1 : 0;
+        const q = word.word.slice(lead);
+        const aRange = { ...range, startColumn: word.startColumn + lead };
+        const out = [];
+        const seenA = new Set();
+        const annItem = (name, fqn, sort) => {
+          if (seenA.has(fqn)) return;
+          seenA.add(fqn);
+          out.push({ label: { label: name, description: fqn }, kind: K.Interface, insertText: name, range: aRange, detail: `@${name} — ${fqn}`, sortText: `${sort}${name}`, additionalTextEdits: importEdit(model, fqn, parsed) });
+        };
+        for (const n of JDK_ANNOTATIONS) if (camelMatch(n, q)) annItem(n, `java.lang.${n}`, '1');
+        for (const t of JV.types) if (!t.outer && /@interface|annotation/i.test(`${t.kind}`) && camelMatch(t.name, q)) annItem(t.name, t.fqn, '0');
+        for (const t of await classpathTypes(model, q, true)) annItem(t.name, t.fqn, '2');
+        return { suggestions: out, incomplete: false };
+      }
+
       // plain identifier position
       const prefix = word.word;
       const inCode = !/^\s*(\/\/|\*|\/\*)/.test(lineText);
@@ -334,6 +370,9 @@ async function javaProvide(model, position, K, R) {
           for (const t of JV.types) { if (!t.outer) add(t.name, t.fqn, t.kind === 'interface' ? K.Interface : t.kind === 'enum' ? K.Enum : K.Class, t.file); if (added.size > 60) break; }
           for (const [n, fqn] of Object.entries(JDK_IMPORT)) { add(n, fqn, JDK[n] && JDK[n].kind === 'interface' ? K.Interface : K.Class); if (added.size > 90) break; }
           for (const n of JAVA_LANG) add(n, `java.lang.${n}`, K.Class);
+        }
+        if (prefix.length >= 2 && /^[A-Z]/.test(prefix)) {
+          for (const t of await classpathTypes(model, prefix, false)) add(t.name, t.fqn, t.kind === 'interface' || t.kind === 'annotation' ? K.Interface : t.kind === 'enum' ? K.Enum : K.Class);
         }
         for (const [k, body, desc] of JAVA_SNIPPETS) if (k.startsWith(prefix.toLowerCase())) suggestions.push({ label: k, kind: K.Snippet, insertText: body, insertTextRules: R, range, detail: desc, sortText: `3${k}` });
         for (const k of JAVA_KEYWORDS) if (k.startsWith(prefix)) suggestions.push({ label: k, kind: K.Keyword, insertText: k, range, sortText: `4${k}` });

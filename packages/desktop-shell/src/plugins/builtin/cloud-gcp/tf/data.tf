@@ -15,10 +15,13 @@ resource "google_sql_database_instance" "db" {
     availability_type = var.env == "prod" ? "REGIONAL" : "ZONAL"
     user_labels       = local.labels
 
-    # no public address: the database is only reachable from inside the VPC
+    # no public address: the database is reached through a private endpoint in its own subnet (Private Service Connect)
     ip_configuration {
-      ipv4_enabled    = false
-      private_network = google_compute_network.vpc.id
+      ipv4_enabled = false
+      psc_config {
+        psc_enabled               = true
+        allowed_consumer_projects = [var.project_id]
+      }
     }
 
     # applications sign in as their service account (IAM database authentication): no passwords to store or rotate
@@ -32,8 +35,28 @@ resource "google_sql_database_instance" "db" {
       point_in_time_recovery_enabled = true
     }
   }
+}
 
-  depends_on = [google_service_networking_connection.psa]
+# the endpoint: an address inside the data subnet that forwards to the database
+resource "google_compute_address" "db_endpoint" {
+  name         = "${local.name}-db-ip"
+  region       = var.region
+  address_type = "INTERNAL"
+  subnetwork   = google_compute_subnetwork.data__S__[0].id
+}
+
+resource "google_compute_forwarding_rule" "db_endpoint" {
+  name                  = "${local.name}-db-endpoint"
+  region                = var.region
+  network               = google_compute_network.vpc__S__.id
+  ip_address            = google_compute_address.db_endpoint.id
+  load_balancing_scheme = ""
+  target                = google_sql_database_instance.db.psc_service_attachment_link
+}
+
+output "database_private_ip" {
+  value       = google_compute_address.db_endpoint.address
+  description = "Connect to the database at this private address (inside the data subnet)"
 }
 
 resource "google_sql_database" "app" {
@@ -67,12 +90,12 @@ resource "google_redis_instance" "cache" {
   tier               = var.env == "prod" ? "STANDARD_HA" : "BASIC"
   memory_size_gb     = 1
   redis_version      = "REDIS_7_0"
-  authorized_network = google_compute_network.vpc.id
+  authorized_network = google_compute_network.vpc__S__.id
   connect_mode       = "PRIVATE_SERVICE_ACCESS"
   auth_enabled       = true
   labels             = local.labels
 
-  depends_on = [google_service_networking_connection.psa]
+  depends_on = [google_service_networking_connection.psa__S__]
 }
 
 #@firestore Firestore (native mode)

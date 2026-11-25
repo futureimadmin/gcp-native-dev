@@ -17,6 +17,7 @@ const toolsMod = require('./core/tools');
 const runtime = require('./core/runtime');
 const codeintel = require('./core/codeintel');
 const javac = require('./core/javac');
+const licenseMod = require('./core/license');
 
 app.setAppUserModelId('in.futureim.nativitystudio'); // groups the taskbar button and uses our icon
 // Data folder follows the product name; carry settings over once from earlier names of this product.
@@ -50,6 +51,7 @@ const wrap = (fn) => async (_e, ...a) => {
 
 let store;
 let secrets;
+let license;
 let terminal;
 let host;
 let tools;
@@ -66,6 +68,7 @@ function boot() {
   tools = toolsMod.create(store);
   tools.applyOverrides();
   secrets = new Secrets(path.join(ud, 'secrets.json'), safeStorage);
+  license = licenseMod.create({ userData: ud, secrets });
   terminal = terminalMod.create({ sendToRenderer, envProvider: () => ({ ...process.env, ...(store.get('envOverrides', {}) || {}) }) });
   host = new PluginHost({
     store, secrets, sendToRenderer, terminal,
@@ -104,13 +107,53 @@ app.on('web-contents-created', (_e, contents) => {
   });
 });
 
+/* ------------------------------ splash screen ------------------------------ */
+
+const MIN_SPLASH_MS = Number(process.env.NATIVITY_SPLASH_MS) || 2800;
+let splash = null;
+let splashAt = 0;
+const gate = { window: false, renderer: false, shown: false };
+
+function createSplash() {
+  splashAt = Date.now();
+  splash = new BrowserWindow({
+    width: 580, height: 380, frame: false, transparent: true, resizable: false, movable: true, center: true, show: false, skipTaskbar: true, alwaysOnTop: true, hasShadow: false, focusable: false,
+    title: 'Nativity Studio', icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+  });
+  splash.once('ready-to-show', () => { if (splash && !splash.isDestroyed()) splash.showInactive(); });
+  splash.webContents.on('did-finish-load', () => {
+    try {
+      const st = license ? license.status() : null;
+      const label = st ? (st.edition === 'enterprise' ? 'Enterprise Edition' : 'Community Edition') : '';
+      if (label && splash && !splash.isDestroyed()) splash.webContents.executeJavaScript(`setEdition(${JSON.stringify(label)})`).catch(() => {});
+    } catch { /* the splash never fails the start-up */ }
+  });
+  splash.loadFile(path.join(__dirname, '..', 'renderer', 'splash.html'));
+}
+
+/** The main window appears when it is loaded and the renderer says it is ready; the splash fades out, never before MIN_SPLASH_MS. */
+function showMainWindow() {
+  if (gate.shown || !gate.window || !gate.renderer || !win || win.isDestroyed()) return;
+  gate.shown = true;
+  const wait = Math.max(0, splashAt + MIN_SPLASH_MS - Date.now());
+  setTimeout(() => {
+    if (win && !win.isDestroyed()) { win.show(); win.focus(); }
+    if (splash && !splash.isDestroyed()) {
+      splash.webContents.executeJavaScript("document.body.classList.add('bye')").catch(() => {});
+      setTimeout(() => { try { if (splash && !splash.isDestroyed()) splash.close(); } catch { /* gone */ } splash = null; }, 480);
+    }
+  }, wait);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1500, height: 940, minWidth: 1000, minHeight: 620,
     title: 'Nativity Studio', backgroundColor: '#0e0f0c', show: false, icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: true },
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => { gate.window = true; showMainWindow(); });
+  setTimeout(() => { gate.renderer = true; showMainWindow(); }, 25000); // a failing renderer must not leave the splash up for ever
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//i.test(url)) shell.openExternal(url);
@@ -326,6 +369,7 @@ function buildMenu() {
         cmd('Plugin Development Guide', 'help.open', undefined, 'plugins'),
         cmd('Keyboard Shortcuts', 'help.open', undefined, 'keys'),
         sep,
+        cmd('Edition and License…', 'license.open'),
         cmd('About Nativity Studio', 'help.about'),
       ],
     },
@@ -353,6 +397,11 @@ function registerCoreIpc() {
     return buf.toString('utf8');
   }));
   ipcMain.handle('fs:writeFile', wrap(async (file, text) => { await fs.promises.writeFile(file, text, 'utf8'); }));
+  ipcMain.handle('fs:writeImage', wrap(async (file, b64) => {
+    if (typeof file !== 'string' || typeof b64 !== 'string' || b64.length > 60 * 1024 * 1024) throw new Error('Invalid image.');
+    await fs.promises.mkdir(path.dirname(file), { recursive: true });
+    await fs.promises.writeFile(file, Buffer.from(b64, 'base64'));
+  }));
   ipcMain.handle('fs:create', wrap(async (target, isDir) => {
     if (fs.existsSync(target)) throw new Error('Already exists.');
     if (isDir) await fs.promises.mkdir(target, { recursive: true });
@@ -415,6 +464,15 @@ function registerCoreIpc() {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.setZoomFactor(n);
   }));
 
+  ipcMain.handle('app:ready', wrap(async () => { gate.renderer = true; showMainWindow(); }));
+
+  // editions and the license (see core/license.js)
+  ipcMain.handle('license:status', wrap(async () => license.status()));
+  ipcMain.handle('license:activate', wrap(async (key) => { const st = await license.activate(key); sendToRenderer('license:changed', st); return st; }));
+  ipcMain.handle('license:refresh', wrap(async () => { const st = await license.refresh(); sendToRenderer('license:changed', st); return st; }));
+  ipcMain.handle('license:remove', wrap(async () => { const st = license.remove(); sendToRenderer('license:changed', st); return st; }));
+  ipcMain.handle('license:open', wrap(async () => { await shell.openExternal(licenseMod.PORTAL || 'https://www.futureim.com'); }));
+
   ipcMain.handle('app:info', wrap(async () => ({
     version: app.getVersion(), platform: process.platform, userData: app.getPath('userData'),
     secureStorage: secrets.available(), electron: process.versions.electron,
@@ -437,9 +495,14 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.whenReady().then(() => {
     boot();
+    createSplash(); // first thing on screen, before anything else is prepared
     registerCoreIpc();
     buildMenu();
     createWindow();
+    // the stored license key is checked in the background: start-up never waits for the network
+    const recheck = () => license.refresh().then((st) => sendToRenderer('license:changed', st)).catch(() => {});
+    setTimeout(recheck, 6000);
+    setInterval(recheck, 6 * 60 * 60 * 1000).unref();
   });
   app.on('window-all-closed', () => {
     if (terminal) terminal.killAll();

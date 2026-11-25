@@ -19,12 +19,12 @@ resource "google_cloud_run_v2_service" "app" {
   template {
     service_account = google_service_account.app.email
 
-    # the service reaches private IPs (databases, caches) through the app subnet: no connector to run or pay for
+    # the service reaches private IPs (databases, caches) through its own subnet: no connector to run or pay for
     vpc_access {
       egress = "PRIVATE_RANGES_ONLY"
       network_interfaces {
-        network    = google_compute_network.vpc.id
-        subnetwork = google_compute_subnetwork.app.id
+        network    = google_compute_network.vpc__S__.id
+        subnetwork = google_compute_subnetwork.run__S__[0].id
       }
     }
 

@@ -1,8 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // The renderer may only call these channel families and listen to these events.
-const INVOKE = /^(fs|dialog|settings|secret|shell|term|host|plugin|app|cloud|proj|prov|nativity|pipeline|project|git|ai|runtime|build|server|search|java|javac):[A-Za-z]+$/;
-const EVENTS = new Set(['menu', 'term:data', 'term:exit', 'cloud:event', 'git:progress', 'plugin:event', 'ai:stream', 'prov:event']);
+const INVOKE = /^(fs|dialog|settings|secret|shell|term|host|plugin|app|cloud|proj|prov|nativity|pipeline|project|git|ai|runtime|build|server|search|java|javac|license):[A-Za-z]+$/;
+const EVENTS = new Set(['menu', 'term:data', 'term:exit', 'cloud:event', 'git:progress', 'plugin:event', 'ai:stream', 'prov:event', 'license:changed']);
 
 contextBridge.exposeInMainWorld('cns', {
   invoke: (channel, ...args) => {

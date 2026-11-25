@@ -58,10 +58,10 @@ variable "apigee_hostname" {
 resource "google_apigee_organization" "org" {
   project_id         = var.project_id
   analytics_region   = var.apigee_analytics_region
-  authorized_network = google_compute_network.vpc.id
+  authorized_network = google_compute_network.vpc__S__.id
   billing_type       = var.apigee_billing_type
 
-  depends_on = [google_service_networking_connection.psa]
+  depends_on = [google_service_networking_connection.psa__S__]
 }
 
 resource "google_apigee_instance" "runtime" {

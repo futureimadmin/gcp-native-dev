@@ -68,6 +68,7 @@ function registerCommands() {
   const C = (id, fn, title) => CNS.command(id, fn, title);
   C('workspace.show', () => showHome(), 'Workspace: Show home');
   C('project.new', newProjectDialog, 'File: New Project…');
+  C('license.open', () => openLicenseScreen({}), 'Help: Edition and license…');
   C('cloud.architecture', () => openArchWizard(), 'Cloud: Architecture wizard (services, network, Terraform)');
   C('file.new', () => createEntry(false), 'File: New File');
   C('folder.open', openFolderDialog, 'File: Open Folder…');
@@ -186,14 +187,13 @@ async function main() {
     showView('explorer');
     $('term-prompt').textContent = promptStr();
 
-    // Editor and cloud checks run together behind the splash screen.
-    await Promise.all([
-      initMonaco().then(setupEditorFeatures).catch((e) => $('home').append(h('p', { class: 't-err', text: `Editor failed to load: ${e.message}` }))),
-      runLaunch(),
-    ]);
+    // The editor loads behind the splash screen. The cloud checks run in the background: the window never waits for them.
+    await initMonaco().then(setupEditorFeatures).catch((e) => $('home').append(h('p', { class: 't-err', text: `Editor failed to load: ${e.message}` })));
+    runLaunch().then(() => { if (typeof renderHome === 'function') renderHome(); }).catch(() => {});
 
     showHome();
     refreshTree();
+    licenseInit(); // edition and license: the screen only appears when neither the trial nor a key is valid
     // ADC found but no project selected: let the user pick one now.
     const g = state.cloudStatus.gcp;
     if (g && g.signedIn && !g.scope) chooseScope('gcp');
@@ -202,6 +202,7 @@ async function main() {
     $('launch').classList.add('hidden');
     status(`Startup problem: ${e.message}`, true);
   }
+  tryInv('app:ready'); // the splash screen closes and the window appears
 }
 
 main();

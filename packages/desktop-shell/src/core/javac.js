@@ -198,6 +198,127 @@ ${r.out}`);
   /** "java.util.Map.Entry" -> ["java.util.Map.Entry", "java.util.Map$Entry"]: nested classes have a $ in their binary name */
   function binaryNames(fqn) { const out = [fqn]; const parts = fqn.split('.'); for (let i = parts.length - 1; i > 0 && /^[A-Z]/.test(parts[i - 1] || ''); i--) out.push(`${parts.slice(0, i).join('.')}.${parts.slice(i).join('$')}`); return [...new Set(out)]; }
 
+  /* ---- every class and annotation of the module's dependencies, for completion (Spring, Quarkus, Jakarta, Lombok, JUnit ...) ---- */
+  const zipCache = new Map(); // jar path + mtime -> [{ name, method, csize, off }]
+  const flagCache = new Map(); // jar path|class name -> access flags
+  const TYPE_FILTER = /(^|\/)(package-info|module-info)\.class$/;
+  // what developers reach for first when they type "@"
+  const POPULAR = new Set(['Autowired', 'Component', 'Service', 'Repository', 'RestController', 'Controller', 'GetMapping', 'PostMapping', 'PutMapping', 'DeleteMapping', 'PatchMapping', 'RequestMapping', 'RequestBody', 'RequestParam', 'PathVariable', 'ResponseStatus', 'Configuration', 'Bean', 'Value', 'Qualifier', 'Primary', 'Profile', 'Transactional', 'SpringBootApplication', 'EnableAutoConfiguration', 'ConfigurationProperties', 'Scheduled', 'Async', 'ExceptionHandler', 'ControllerAdvice', 'RestControllerAdvice', 'Entity', 'Table', 'Id', 'Column', 'GeneratedValue', 'ApplicationScoped', 'RequestScoped', 'Singleton', 'Inject', 'Path', 'GET', 'POST', 'PUT', 'DELETE', 'Produces', 'Consumes', 'QuarkusTest', 'ConfigProperty', 'Data', 'Getter', 'Setter', 'Builder', 'NoArgsConstructor', 'AllArgsConstructor', 'RequiredArgsConstructor', 'Slf4j', 'Test', 'BeforeEach', 'AfterEach', 'BeforeAll', 'AfterAll', 'ParameterizedTest', 'Mock', 'InjectMocks', 'ExtendWith', 'Valid', 'NotNull', 'NotBlank', 'Size', 'JsonProperty', 'JsonIgnore', 'Nullable']);
+
+  function zipEntries(file) {
+    let st;
+    try { st = fs.statSync(file); } catch { return []; }
+    const key = `${file}|${st.mtimeMs}`;
+    if (zipCache.has(key)) return zipCache.get(key);
+    const out = [];
+    let fd = -1;
+    try {
+      fd = fs.openSync(file, 'r');
+      const tailLen = Math.min(st.size, 65557);
+      const tail = Buffer.alloc(tailLen);
+      fs.readSync(fd, tail, 0, tailLen, st.size - tailLen);
+      const e = tail.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+      if (e >= 0) {
+        const cdSize = tail.readUInt32LE(e + 12);
+        const cdOff = tail.readUInt32LE(e + 16);
+        if (cdOff !== 0xffffffff && cdSize < 64 * 1024 * 1024) {
+          const cd = Buffer.alloc(cdSize);
+          fs.readSync(fd, cd, 0, cdSize, cdOff);
+          let p = 0;
+          while (p + 46 <= cd.length && cd.readUInt32LE(p) === 0x02014b50) {
+            const method = cd.readUInt16LE(p + 10);
+            const csize = cd.readUInt32LE(p + 20);
+            const nameLen = cd.readUInt16LE(p + 28);
+            const extra = cd.readUInt16LE(p + 30);
+            const comment = cd.readUInt16LE(p + 32);
+            const off = cd.readUInt32LE(p + 42);
+            const name = cd.toString('utf8', p + 46, p + 46 + nameLen);
+            if (name.endsWith('.class') && !name.includes('$') && !name.startsWith('META-INF/') && !TYPE_FILTER.test(name)) out.push({ name, method, csize, off });
+            p += 46 + nameLen + extra + comment;
+          }
+        }
+      }
+    } catch { /* an unreadable jar contributes nothing */ } finally { if (fd >= 0) try { fs.closeSync(fd); } catch { /* ignore */ } }
+    zipCache.set(key, out);
+    return out;
+  }
+
+  /** Access flags of one class (public, interface, annotation, enum), read from the class file's header. */
+  function classFlags(file, entry) {
+    const ck = `${file}|${entry.name}`;
+    if (flagCache.has(ck)) return flagCache.get(ck);
+    let flags = null;
+    let fd = -1;
+    try {
+      fd = fs.openSync(file, 'r');
+      const lh = Buffer.alloc(30);
+      fs.readSync(fd, lh, 0, 30, entry.off);
+      const start = entry.off + 30 + lh.readUInt16LE(26) + lh.readUInt16LE(28);
+      const raw = Buffer.alloc(entry.csize);
+      fs.readSync(fd, raw, 0, entry.csize, start);
+      const buf = entry.method === 8 ? require('zlib').inflateRawSync(raw) : raw;
+      if (buf.readUInt32BE(0) === 0xcafebabe) {
+        let p = 8;
+        const n = buf.readUInt16BE(p); p += 2;
+        for (let i = 1; i < n; i++) {
+          const tag = buf[p];
+          if (tag === 1) p += 3 + buf.readUInt16BE(p + 1);
+          else if ([3, 4, 9, 10, 11, 12, 17, 18].includes(tag)) p += 5;
+          else if (tag === 5 || tag === 6) { p += 9; i++; }
+          else if ([7, 8, 16, 19, 20].includes(tag)) p += 3;
+          else if (tag === 15) p += 4;
+          else { p = -1; break; }
+        }
+        if (p > 0) flags = buf.readUInt16BE(p);
+      }
+    } catch { flags = null; } finally { if (fd >= 0) try { fs.closeSync(fd); } catch { /* ignore */ } }
+    flagCache.set(ck, flags);
+    return flags;
+  }
+
+  const camelOk = (name, q) => {
+    if (!q) return true;
+    const lq = q.toLowerCase();
+    if (name.toLowerCase().startsWith(lq)) return true;
+    const caps = name.replace(/[^A-Z0-9]/g, '');
+    return caps.length > 0 && q === q.toUpperCase() && caps.toLowerCase().startsWith(lq);
+  };
+
+  ipcMain.handle('java:types', wrap(async (given, opts = {}) => {
+    const root = workspaceOr(given);
+    if (typeof opts.file !== 'string' || !inside(root, opts.file)) return { types: [] };
+    const prefix = String(opts.prefix || '');
+    if (!/^[A-Za-z0-9_$]{0,40}$/.test(prefix)) return { types: [] };
+    const annotation = !!opts.annotation;
+    const mod = model.moduleFor(root, path.resolve(opts.file));
+    const cp = mod.aggregator ? [] : await model.classpath(root, mod, []);
+    const found = [];
+    for (const jar of cp.filter((x) => x.toLowerCase().endsWith('.jar'))) {
+      for (const e of zipEntries(jar)) {
+        const simple = e.name.slice(e.name.lastIndexOf('/') + 1, -6);
+        if (prefix ? !camelOk(simple, prefix) : !(annotation && POPULAR.has(simple))) continue;
+        found.push({ jar, e, simple, fqn: e.name.slice(0, -6).replace(/\//g, '.') });
+        if (found.length > 1500) break;
+      }
+    }
+    // closest first: exact, then starts with, then shorter names; frameworks developers use before internals
+    const rank = (x) => (x.simple.toLowerCase() === prefix.toLowerCase() ? 0 : x.simple.toLowerCase().startsWith(prefix.toLowerCase()) ? 1 : 2) * 10 + (/\.(internal|impl|shaded)\./.test(x.fqn) ? 5 : 0) + (/^(org\.springframework|io\.quarkus|jakarta|javax|lombok|org\.junit|com\.google|com\.fasterxml)\./.test(x.fqn) ? 0 : 2) - (POPULAR.has(x.simple) ? 4 : 0) + (/^(org\.codehaus\.plexus|org\.apache\.maven|com\.oracle\.svm|org\.graalvm|org\.eclipse\.aether|org\.sonatype)\./.test(x.fqn) ? 8 : 0);
+    found.sort((a, b) => rank(a) - rank(b) || a.simple.length - b.simple.length || a.simple.localeCompare(b.simple));
+    const types = [];
+    const perName = new Map();
+    for (const x of found) {
+      if (types.length >= 80) break;
+      const flags = classFlags(x.jar, x.e);
+      if (flags == null || !(flags & 0x0001)) continue; // public only
+      const isAnn = !!(flags & 0x2000);
+      if (annotation && !isAnn) continue;
+      if ((perName.get(x.simple) || 0) >= 6) continue;
+      perName.set(x.simple, (perName.get(x.simple) || 0) + 1);
+      types.push({ name: x.simple, fqn: x.fqn, kind: isAnn ? 'annotation' : flags & 0x0200 ? 'interface' : flags & 0x4000 ? 'enum' : 'class' });
+    }
+    return { types };
+  }));
+
   ipcMain.handle('java:members', wrap(async (given, opts = {}) => {
     const root = workspaceOr(given);
     const javap = await javapBin();

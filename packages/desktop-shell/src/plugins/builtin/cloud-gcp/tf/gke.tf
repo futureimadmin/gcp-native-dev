@@ -21,14 +21,14 @@ resource "google_container_cluster" "gke" {
   name                = "${local.name}-gke"
   location            = var.region
   enable_autopilot    = true
-  network             = google_compute_network.vpc.id
-  subnetwork          = google_compute_subnetwork.app.id
+  network             = google_compute_network.vpc__S__.id
+  subnetwork          = google_compute_subnetwork.gke__S__[0].id
   deletion_protection = var.deletion_protection
   resource_labels     = local.labels
 
   ip_allocation_policy {
-    cluster_secondary_range_name  = "${local.name}-pods"
-    services_secondary_range_name = "${local.name}-services"
+    cluster_secondary_range_name  = "${local.name}__N__-pods"
+    services_secondary_range_name = "${local.name}__N__-services"
   }
 
   private_cluster_config {

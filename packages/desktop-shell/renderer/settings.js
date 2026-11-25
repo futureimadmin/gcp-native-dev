@@ -158,6 +158,8 @@ function aboutPane() {
   const i = state.info || {};
   return h('div', {}, h('h3', { text: 'Nativity Studio' }),
     h('div', { class: 'kv' }, `Version ${i.version || ''} · Electron ${i.electron || ''} · ${i.platform || ''}`),
+    h('div', { class: 'kv' }, `Edition: ${LS.st ? (LS.st.edition === 'enterprise' ? 'Enterprise Edition' : `Community Edition${LS.st.canUse ? ` (${LS.st.daysLeft} days left in the trial)` : ' (trial ended)'}`) : ''}`),
+    h('button', { text: 'Edition and license…', onclick: () => openLicenseScreen({}) }),
     h('div', { class: 'kv' }, `Data folder: ${i.userData || ''}`),
     h('div', { class: 'kv' }, `Secure key storage: ${i.secureStorage ? 'available' : 'unavailable'}`));
 }
