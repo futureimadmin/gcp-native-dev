@@ -106,7 +106,7 @@ function create({ userData, secrets, now = () => Date.now(), fetchImpl, server }
   /** Asks the license server. { ok:false } means it could not be reached (not that the key is bad). */
   async function check(key) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 8000);
+    const timer = setTimeout(() => ctl.abort(), 20000);
     try {
       const r = await doFetch(`${base}/api/v1/licenses/validate?product=${encodeURIComponent(PRODUCT)}&licenseKey=${encodeURIComponent(key)}`, { signal: ctl.signal, headers: { Accept: 'application/json' } });
       if (!r.ok) return { ok: false, error: `The license server answered ${r.status}.` };

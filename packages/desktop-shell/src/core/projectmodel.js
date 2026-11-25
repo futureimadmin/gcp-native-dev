@@ -141,11 +141,11 @@ class ProjectModel {
   async classpath(workspace, m, notes) {
     const cp = [];
     if (m.build === 'maven') cp.push(...(await this.mavenClasspath(workspace, m, notes)));
+    if (m.build === 'gradle') cp.push(...(await this.gradleClasspath(workspace, m, notes)));
     const libs = [];
     this.walkJars(m.root, libs);
     cp.push(...libs);
     for (const x of [m, ...(m.siblings || [])]) if (x.outputDir && exists(x.outputDir)) cp.push(x.outputDir);
-    if (m.build === 'gradle' && !cp.some((e) => e.endsWith('.jar'))) notes.push('Gradle dependencies are not resolved by the IDE yet; errors about missing packages may be wrong. Put the jars in a lib folder, or build once so the classes folder exists.');
     return cp;
   }
 
@@ -160,6 +160,50 @@ class ProjectModel {
         if (e.isDirectory()) { if (!SKIP.has(e.name) && d < 4) stack.push([p, d + 1]); } else if (e.name.endsWith('.jar') && /[\\/](lib|libs)[\\/]/.test(p)) out.push(p);
       }
     }
+  }
+
+  /** Gradle: an init script adds a task that prints every source set's compile and runtime classpath; the project's wrapper is preferred. */
+  async gradleClasspath(workspace, m, notes) {
+    const files = ['build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'gradle.properties'].map((n) => path.join(m.root, n)).concat([path.join(m.root, 'gradle', 'libs.versions.toml')]);
+    const key = files.map((f) => (exists(f) ? `${f}:${fs.statSync(f).mtimeMs}` : '')).join('|');
+    const dir = this.cacheDir(workspace);
+    const cacheFile = path.join(dir, `classpath-${hash(m.root)}.json`);
+    try {
+      const c = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+      if (c.key === key) { if (c.failed) notes.push(`Gradle could not resolve the dependencies of ${m.name}; errors about missing packages may be wrong. Run "gradlew build" once with internet access.`); return c.entries; }
+    } catch { /* resolve below */ }
+    // the wrapper may sit in this folder or in a parent (multi-project builds)
+    let cmd = null;
+    const wrapper = process.platform === 'win32' ? 'gradlew.bat' : 'gradlew';
+    for (let d = m.root, i = 0; i < 5 && !cmd; i++, d = path.dirname(d)) { if (exists(path.join(d, wrapper))) cmd = path.join(d, wrapper); if (path.dirname(d) === d) break; }
+    if (!cmd && this.tools.findInPath('gradle')) cmd = 'gradle';
+    if (!cmd) { notes.push('Gradle (gradle or gradlew) was not found, so dependencies are not on the compile path; errors about missing packages may be wrong.'); return []; }
+    const outFile = path.join(dir, `gcp-${hash(m.root)}.txt`);
+    const initFile = path.join(dir, 'cnd-classpath.init.gradle');
+    try { fs.rmSync(outFile, { force: true }); } catch { /* ignore */ }
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(initFile, [
+        'allprojects { p ->',
+        '  p.tasks.register("cndClasspath") {',
+        '    doLast {',
+        '      def found = new LinkedHashSet()',
+        '      def sc = p.extensions.findByName("sourceSets")',
+        '      if (sc != null) sc.each { s -> found.addAll(s.compileClasspath.files); found.addAll(s.runtimeClasspath.files) }',
+        '      new File(System.getProperty("cnd.out")).text = found.findAll { it.isFile() && it.name.endsWith(".jar") }.join(File.pathSeparator)',
+        '    }',
+        '  }',
+        '}', ''].join('\n'));
+    } catch (e) { notes.push(`Gradle dependencies could not be read: ${e.message}`); return []; }
+    const args = ['-q', '--console=plain', '-I', fwd(initFile), `-Dcnd.out=${fwd(outFile)}`, 'cndClasspath'];
+    let r = await exec(cmd, ['--offline', ...args], { cwd: m.root, timeout: 300000 });
+    if (!r.ok || !exists(outFile)) r = await exec(cmd, args, { cwd: m.root, timeout: 300000 });
+    let entries = [];
+    if (r.ok && exists(outFile)) entries = read(outFile).split(path.delimiter).map((x) => x.trim()).filter(Boolean);
+    const failed = !r.ok || !exists(outFile);
+    try { fs.writeFileSync(cacheFile, JSON.stringify({ key, entries, failed, detail: failed ? (r.err || r.out || '').slice(0, 400) : '' })); } catch { /* cache is optional */ }
+    if (failed) notes.push(`Gradle could not resolve the dependencies of ${m.name}; errors about missing packages may be wrong.`);
+    return entries;
   }
 
   async mavenClasspath(workspace, m, notes) {

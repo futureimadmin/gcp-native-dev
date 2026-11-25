@@ -244,7 +244,7 @@ function model(n) {
   accounts.push({ id: 'app', email: `${n.app}-${n.env}-app`, title: 'Application', purpose: 'What your code runs as. One identity per workload, no keys.', roles: appGrants });
   if (hasGke) accounts.push({ id: 'nodes', email: `${n.app}-${n.env}-nodes`, title: 'GKE nodes', purpose: 'The cluster’s machines: logs, metrics and pulling images only.', roles: ['roles/logging.logWriter', 'roles/monitoring.metricWriter', 'roles/monitoring.viewer', 'roles/stackdriver.resourceMetadata.writer', 'roles/artifactregistry.reader'].map((r) => ({ role: r, scope: 'project', why: '' })) });
   if (gw === 'octopus') accounts.push({ id: 'octopus', email: `${n.app}-${n.env}-octopus`, title: 'Octopus API Gateway', purpose: 'The gateway’s own identity through workload identity.', roles: [{ role: 'roles/datastore.user', scope: 'project', why: 'its configuration and audit data' }, { role: 'roles/logging.logWriter', scope: 'project', why: '' }, { role: 'roles/monitoring.metricWriter', scope: 'project', why: '' }] });
-  const tfRoles = [...new Set(['roles/compute.networkAdmin', 'roles/iam.serviceAccountAdmin', 'roles/iam.serviceAccountUser', 'roles/serviceusage.serviceUsageConsumer', ...n.services.flatMap((s) => s.tfRoles || [])])].sort();
+  const tfRoles = [...new Set(['roles/compute.networkAdmin', 'roles/compute.securityAdmin', 'roles/iam.serviceAccountAdmin', 'roles/iam.serviceAccountUser', 'roles/serviceusage.serviceUsageConsumer', ...n.services.flatMap((s) => s.tfRoles || [])])].sort();
   const grantable = [...new Set([...accounts.flatMap((a) => a.roles.map((r) => r.role)), 'roles/iam.workloadIdentityUser'])].sort();
   accounts.push({ id: 'terraform', email: 'cnd-tf-sa', title: 'Terraform', purpose: 'Creates and changes the infrastructure. Used only for provisioning, never by the application.', roles: tfRoles.map((r) => ({ role: r, scope: 'project', why: '' })), grantable });
 
@@ -461,7 +461,8 @@ function buildSteps(n, m, tfFiles, project) {
     const own = { env: e.name, group: g };
     steps.push({ ...own, id: `project-create-${e.name}`, title: `Create project ${c.id} for ${e.name}`, cmd: 'gcloud', args: ['projects', 'create', c.id, `--name=${c.name}`, `--labels=app=${n.app},environment=${e.name},managed-by=nativity-studio`, ...(c.org ? [`--organization=${c.org}`] : []), '--quiet'], okIf: 'already exists', retries: 2, retryDelay: 8000,
       check: { cmd: 'gcloud', args: ['projects', 'describe', c.id, '--format=value(projectId)'], match: `^${c.id}$` } });
-    steps.push({ ...own, id: `project-billing-${e.name}`, title: `Link billing account ${c.billing} to ${c.id}`, cmd: 'gcloud', args: ['billing', 'projects', 'link', c.id, `--billing-account=${c.billing}`], retries: 4, retryDelay: 8000 });
+    steps.push({ ...own, id: `project-billing-${e.name}`, title: `Link billing account ${c.billing} to ${c.id}`, cmd: 'gcloud', args: ['billing', 'projects', 'link', c.id, `--billing-account=${c.billing}`], retries: 4, retryDelay: 8000,
+      check: { cmd: 'gcloud', args: ['billing', 'projects', 'describe', c.id, '--format=value(billingAccountName)'], match: `^billingAccounts/${c.billing}$` } });
   }
   const bucket = `${project}-tfstate`;
   const tfSa = `cnd-tf-sa@${project}.iam.gserviceaccount.com`;
@@ -483,14 +484,14 @@ function buildSteps(n, m, tfFiles, project) {
   const tf = m.accounts.find((a) => a.id === 'terraform');
   for (const r of tf.roles) add({ id: `tf-role-${r.role.split('/')[1]}`, title: `cnd-tf-sa: ${r.role}`, cmd: 'gcloud', args: ['projects', 'add-iam-policy-binding', project, `--member=serviceAccount:${tfSa}`, `--role=${r.role}`, '--condition=None', '--quiet'], retries: 3, retryDelay: 8000 });
   add({ id: 'tf-role-grant', title: 'cnd-tf-sa: may grant only the roles of this architecture', cmd: 'gcloud', args: ['projects', 'add-iam-policy-binding', project, `--member=serviceAccount:${tfSa}`, '--role=roles/resourcemanager.projectIamAdmin', '--condition-from-file=infra/terraform/.bootstrap/grant-condition.json', '--quiet'], retries: 3, retryDelay: 8000 });
-  if (userMember) add({ id: 'tf-sa-you', title: 'You: may run Terraform as cnd-tf-sa (impersonation)', cmd: 'gcloud', args: ['iam', 'service-accounts', 'add-iam-policy-binding', tfSa, `--member=${userMember}`, '--role=roles/iam.serviceAccountTokenCreator', `--project=${project}`, '--quiet'], retries: 3 });
+  if (userMember) add({ id: 'tf-sa-you', title: 'You: may run Terraform as cnd-tf-sa (impersonation)', cmd: 'gcloud', args: ['iam', 'service-accounts', 'add-iam-policy-binding', tfSa, `--member=${userMember}`, '--role=roles/iam.serviceAccountTokenCreator', `--project=${project}`, '--quiet'], retries: 6, retryDelay: 10000 });
 
   // 3. Terraform
   const base = ['-chdir=infra/terraform'];
-  add({ id: 'tf-init', title: 'terraform init', cmd: 'terraform', args: [...base, 'init', '-input=false', '-reconfigure', `-backend-config=bucket=${bucket}`, `-backend-config=prefix=${env}`, `-backend-config=impersonate_service_account=${tfSa}`], timeout: 600000, retries: 3, retryDelay: 15000 });
-  add({ id: 'tf-validate', title: 'terraform validate', cmd: 'terraform', args: [...base, 'validate'], timeout: 120000 });
-  add({ id: 'tf-plan', title: `terraform plan (${env})`, cmd: 'terraform', args: [...base, 'plan', '-input=false', '-lock-timeout=60s', `-var-file=envs/${env}.tfvars`, `-var=impersonate_service_account=${tfSa}`, `-out=${env}.tfplan`], timeout: 900000 });
-  add({ id: 'tf-apply', title: `terraform apply (${env}): creates the architecture`, cmd: 'terraform', args: [...base, 'apply', '-input=false', '-lock-timeout=60s', `${env}.tfplan`], timeout: 3600000 });
+  add({ id: 'tf-init', title: 'terraform init', cmd: 'terraform', args: [...base, 'init', '-input=false', '-no-color', '-reconfigure', `-backend-config=bucket=${bucket}`, `-backend-config=prefix=${env}`, `-backend-config=impersonate_service_account=${tfSa}`], timeout: 600000, retries: 10, retryDelay: 15000 });
+  add({ id: 'tf-validate', title: 'terraform validate', cmd: 'terraform', args: [...base, 'validate', '-no-color'], timeout: 120000 });
+  add({ id: 'tf-plan', title: `terraform plan (${env})`, cmd: 'terraform', args: [...base, 'plan', '-input=false', '-no-color', '-lock-timeout=60s', `-var-file=envs/${env}.tfvars`, `-var=impersonate_service_account=${tfSa}`, `-out=${env}.tfplan`], timeout: 900000 });
+  add({ id: 'tf-apply', title: `terraform apply (${env}): creates the architecture`, cmd: 'terraform', args: [...base, 'apply', '-input=false', '-no-color', '-lock-timeout=60s', `${env}.tfplan`], timeout: 3600000 });
   add({ id: 'file-state', title: 'Remember the architecture in .nativity/architecture.json', cmd: 'echo', args: ['write'], writeFile: { path: '.nativity/architecture.json', content: `${JSON.stringify({ app: n.app, region: n.region, services: n.services.filter((s) => !s.custom).map((s) => s.id), custom: n.custom.map((c) => ({ name: c.name, api: c.apis[0], tier: c.tier, role: (c.grants[0] || {}).role || '' })), edges: n.edges, notes: n.notes, canvas: n.canvas, options: { nat: n.options.nat }, envs: n.envs.map((e) => ({ name: e.name, protected: e.protected, project: e.project })), env }, null, 2)}\n` } });
   return steps;
 }

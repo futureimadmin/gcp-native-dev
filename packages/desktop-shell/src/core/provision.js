@@ -165,7 +165,9 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
   });
 
   function tail(r) {
-    return String(r.err || r.out || '').split(/\r?\n/).filter(Boolean).slice(-6).join('\n').slice(0, 1200);
+    const lines = String(r.err || r.out || '').replace(/\u001b\[[0-9;]*m/g, '').split(/\r?\n/).filter(Boolean);
+    const errs = lines.filter((l) => /error|reauthentication|denied|not found|permission/i.test(l));
+    return (errs.length ? errs.slice(0, 6) : lines.slice(-6)).join('\n').slice(0, 1200);
   }
 
   async function runPlan(runId, plan) {
