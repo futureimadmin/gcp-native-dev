@@ -80,7 +80,7 @@ function boot() {
   require('./core/nativity').register({ ipcMain, wrap, getWorkspace: () => workspace });
   const flow = cloudflow.register({ ipcMain, wrap, host, terminal, send: sendToRenderer });
   require('./core/provision').register({ ipcMain, wrap, host, send: sendToRenderer, cloudflow: flow });
-  projects.register({ ipcMain, wrap, host, send: sendToRenderer, store });
+  projects.register({ ipcMain, wrap, host, send: sendToRenderer, store, flow });
   ai.register({ ipcMain, wrap, host, store, secrets, terminal, send: sendToRenderer });
   runtime.register({ ipcMain, wrap, tools });
   codeintel.register({ ipcMain, wrap, getWorkspace: () => workspace });

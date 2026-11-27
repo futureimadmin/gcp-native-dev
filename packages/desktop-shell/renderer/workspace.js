@@ -310,9 +310,84 @@ function tile(icon, title, sub, onclick) {
   return h('button', { class: 'tile', onclick }, h('span', { class: 'ticon', text: icon }), h('b', { text: title }), h('small', { text: sub }));
 }
 
+/** Dashboard: one box per project with its cloud provider(s), the environments created and a few facts. */
+function ago(t) {
+  if (!t) return '';
+  const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+  return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago';
+}
+
+function dashCard(d) {
+  const current = state.workspace && d.path.toLowerCase() === String(state.workspace).toLowerCase();
+  const cloudIds = Object.keys(d.clouds);
+  const provCount = cloudIds.reduce((n, id) => n + Object.keys(d.clouds[id]).length, 0);
+  const rows = cloudIds.map((id) => {
+    const meta = state.clouds.find((c) => c.id === id) || { name: id, short: id, color: '#888' };
+    const byEnv = d.clouds[id];
+    const names = [...d.envs, ...Object.keys(byEnv).filter((e) => !d.envs.includes(e))];
+    const first = Object.values(byEnv)[0] || {};
+    return h('div', { class: 'dcloud' },
+      h('div', { class: 'dch' }, h('span', { class: 'dbadge', style: 'background:' + meta.color, text: meta.short || meta.name }), h('b', { text: meta.name }),
+        h('small', { text: [first.region, first.account].filter(Boolean).join(' · ') })),
+      h('div', { class: 'denvs' }, names.map((e) => h('span', { class: 'denv ' + (byEnv[e] ? 'on' : 'off'), 'data-key': d.path + '|' + id + '|' + e, title: byEnv[e] ? 'Created' + (byEnv[e].at ? ' ' + String(byEnv[e].at).slice(0, 10) : '') : 'Not created yet', text: e }))));
+  });
+  return h('div', { class: 'dcard' + (current ? ' current' : ''), onclick: () => openFolder(d.path) },
+    h('div', { class: 'dtop' }, h('b', { text: d.name }), current ? h('span', { class: 'chip ok', text: 'open' }) : null,
+      h('span', { class: 'x', title: 'Remove from the dashboard', text: '✕', onclick: async (e) => { e.stopPropagation(); await tryInv('app:removeRecent', d.path); tryInv('app:refreshMenu'); renderHome(); } })),
+    h('div', { class: 'dmeta' }, [d.kind, d.branch ? '⎇ ' + d.branch : '', d.apps.length ? d.apps.length + ' app' + (d.apps.length > 1 ? 's' : '') : ''].filter(Boolean).join('  ·  ') || ' '),
+    rows.length ? h('div', { class: 'dclouds' }, rows) : h('div', { class: 'dnone', text: d.enabled ? 'Cloud Native is on, no environments created yet.' : 'No cloud yet. Open it and choose Enable Cloud Native Development.' }),
+    h('div', { class: 'dfoot' }, h('span', { text: provCount ? provCount + ' environment' + (provCount > 1 ? 's' : '') + ' on ' + cloudIds.length + ' cloud' + (cloudIds.length > 1 ? 's' : '') : 'Local only' }),
+      h('span', { text: d.openedAt ? 'opened ' + ago(d.openedAt) : '' })),
+    h('div', { class: 'dpath', text: d.path }));
+}
+
+function dashboard(list) {
+  const bar = h('div', { class: 'dbar' },
+    h('button', { text: '↻ Refresh status', onclick: () => dashStatus(list, true) }),
+    h('button', { text: '🔍 Scan a folder…', onclick: scanForProjects }),
+    h('span', { class: 'dlegend' }, [['ok', 'running'], ['warn', 'changing'], ['bad', 'problem'], ['gone', 'missing']].map(([c, t]) => h('span', { class: 'denv st-' + c, text: t }))));
+  if (!list.length) return h('div', {}, bar, h('div', { class: 'hint', text: 'Projects you open or create will appear here as boxes. Use "Scan a folder" to find the ones already on this PC.' }));
+  setTimeout(() => dashStatus(list, false), 50);
+  return h('div', {}, bar, h('div', { class: 'dgrid' }, list.map(dashCard)));
+}
+
+let DASH_RUN = 0;
+/** Ask each project for the live state of its environments and colour the chips; clouds that are not signed in just stay plain. */
+async function dashStatus(list, force) {
+  const my = ++DASH_RUN;
+  const todo = list.filter((d) => Object.keys(d.clouds).length);
+  if (force) document.querySelectorAll('.denv.on').forEach((c) => c.classList.add('st-wait'));
+  let i = 0;
+  const worker = async () => {
+    while (i < todo.length && my === DASH_RUN) {
+      const d = todo[i++];
+      const r = await tryInv('dash:status', d.path);
+      if (my !== DASH_RUN) return;
+      for (const s of (r.ok ? r.data : [])) {
+        const chip = [...document.querySelectorAll('.denv')].find((c) => c.dataset.key === d.path + '|' + s.cloud + '|' + s.env);
+        if (!chip) continue;
+        chip.classList.remove('st-wait', 'st-ok', 'st-warn', 'st-bad', 'st-gone', 'st-unknown');
+        chip.classList.add('st-' + s.state); chip.title = s.detail;
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  if (my === DASH_RUN) document.querySelectorAll('.denv.st-wait').forEach((c) => c.classList.remove('st-wait'));
+}
+
+async function scanForProjects() {
+  const dir = await tryInv('dialog:selectFolder', 'Folder that contains your projects');
+  if (!dir.ok || !dir.data) return;
+  status('Looking for projects…');
+  const r = await tryInv('dash:scan', dir.data);
+  if (!r.ok) return status(r.error, true);
+  status(r.data.added ? 'Found ' + r.data.found + ' project(s), added ' + r.data.added + ' to the dashboard.' : 'Found ' + r.data.found + ' project(s); all were already on the dashboard.');
+  renderHome();
+}
+
 async function renderHome() {
   const home = $('home');
-  const recents = await inv('app:recents').catch(() => []);
+  const dash = await inv('dash:projects').catch(() => []);
   const p = state.proj;
 
   const clouds = state.clouds.map((c) => {
@@ -347,12 +422,7 @@ async function renderHome() {
         h('div', { class: 'row' },
           h('button', { class: p && p.enabled ? '' : 'primary', text: p && p.enabled ? 'Cloud Native settings' : 'Enable Cloud Native Development', onclick: () => (p && p.enabled ? showView('clouds') : CNS.run('cloud.toggleMode')) }),
           h('button', { text: 'Modernize', onclick: () => CNS.run('modernize.assess') })))) : null,
-    homeSection('Recent projects',
-      recents.length
-        ? h('div', { class: 'recents' }, recents.map((r) => h('div', { class: 'recent', onclick: () => openFolder(r.path) },
-            h('b', { text: r.name }), h('small', { text: r.path }),
-            h('span', { class: 'x', title: 'Remove from list', text: '✕', onclick: async (e) => { e.stopPropagation(); await tryInv('app:removeRecent', r.path); tryInv('app:refreshMenu'); renderHome(); } }))))
-        : h('div', { class: 'hint', text: 'Projects you open will appear here.' })),
+    homeSection('Projects', dashboard(dash)),
     homeSection('Connected clouds', h('div', { class: 'cards' }, clouds), h('div', { class: 'row' }, h('button', { text: 'Manage cloud accounts', onclick: () => { showView('clouds'); } }))),
     homeSection('AI assistants', h('div', { class: 'cards' }, aiCards), h('div', { class: 'row' }, h('button', { text: 'Configure AI', onclick: () => openSettings('ai') }), h('button', { text: 'Open assistant', onclick: () => CNS.run('ai.toggle') })))
   ];
