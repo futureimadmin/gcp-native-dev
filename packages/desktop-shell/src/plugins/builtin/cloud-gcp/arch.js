@@ -476,6 +476,13 @@ function buildSteps(n, m, tfFiles, project) {
 
   // 2. what must exist before Terraform: APIs, a state bucket, a Terraform identity that can only do this job
   add({ id: 'apis', title: `Turn on ${apis.length} Google APIs`, cmd: 'gcloud', args: ['services', 'enable', ...apis, `--project=${project}`], timeout: 900000, retries: 2, retryDelay: 15000 });
+  // a project made by this run starts with Google's open 'default' network (SSH and RDP open to the world): the architecture has its own VPC, so remove it
+  const thisEnv = n.envs.find((e) => e.name === n.env);
+  if (thisEnv && thisEnv.create && apis.includes('compute.googleapis.com')) {
+    const gone = { cmd: 'gcloud', args: ['compute', 'networks', 'list', `--project=${project}`, '--filter=name=default', '--format=value(name)'], match: '^' + String.fromCharCode(36), timeout: 120000 };
+    add({ id: 'default-network-rules', title: "Remove the open rules of Google's default network (new project only)", cmd: 'gcloud', args: ['compute', 'firewall-rules', 'delete', 'default-allow-icmp', 'default-allow-internal', 'default-allow-rdp', 'default-allow-ssh', `--project=${project}`, '--quiet'], optional: true, okIf: 'not found|was not found|resource.*not.*found', retries: 3, retryDelay: 10000, check: gone });
+    add({ id: 'default-network', title: "Remove Google's default network (new project only)", cmd: 'gcloud', args: ['compute', 'networks', 'delete', 'default', `--project=${project}`, '--quiet'], optional: true, okIf: 'not found|was not found', retries: 3, retryDelay: 10000, check: gone });
+  }
   add({ id: 'state-bucket', title: `Create the Terraform state bucket gs://${bucket}`, cmd: 'gcloud', args: ['storage', 'buckets', 'create', `gs://${bucket}`, `--project=${project}`, `--location=${n.region}`, '--uniform-bucket-level-access', '--public-access-prevention', '--quiet'], okIf: 'already exists|409',
     check: { cmd: 'gcloud', args: ['storage', 'buckets', 'describe', `gs://${bucket}`, '--format=value(name)'], match: `^${bucket}$` } });
   add({ id: 'state-versioning', title: 'Keep every version of the state', cmd: 'gcloud', args: ['storage', 'buckets', 'update', `gs://${bucket}`, '--versioning'] });

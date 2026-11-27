@@ -33,25 +33,41 @@ function deployStep(cloud, app) {
     return [
       '      - uses: aws-actions/configure-aws-credentials@v4',
       '        with:',
-      '          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}',
+      '          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}   # ' + app + '-<environment>-deployer, in the AWS account of this environment',
       '          aws-region: ${{ vars.AWS_REGION }}',
-      '      - name: Deploy (starter: replace with your ECS / App Runner / Lambda deploy)',
-      '        run: echo "Deploy image $IMAGE to ${{ github.job }} in ${{ vars.AWS_REGION }}"',
+      '      - id: ecr',
+      '        uses: aws-actions/amazon-ecr-login@v2',
+      '      - uses: docker/login-action@v3   # read the image that the build job pushed',
+      '        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }',
+      '      - name: Copy the image into this environment',
+      '        run: |',
+      '          REPO="' + app + '-${{ github.job }}"',
+      '          if aws ecr describe-images --repository-name "$REPO" --image-ids imageTag=${{ github.sha }} >/dev/null 2>&1; then echo "already there"; else',
+      '            docker buildx imagetools create --tag "${{ steps.ecr.outputs.registry }}/$REPO:${{ github.sha }}" "$IMAGE"',
+      '          fi',
+      '      - name: Deploy (starter - replace with your ECS / App Runner / Lambda deploy)',
+      '        run: echo "Deploy ${{ steps.ecr.outputs.registry }}/' + app + '-${{ github.job }}:${{ github.sha }} in ${{ vars.AWS_REGION }}"',
     ];
   }
   if (cloud === 'azure') {
     return [
       '      - uses: azure/login@v2',
       '        with:',
-      '          client-id: ${{ vars.AZURE_CLIENT_ID }}',
+      '          client-id: ${{ vars.AZURE_CLIENT_ID }}   # the deployer identity of this environment',
       '          tenant-id: ${{ vars.AZURE_TENANT_ID }}',
-      '          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}',
-      '      - name: Deploy (starter: replace with your Container Apps / App Service deploy)',
-      '        run: echo "Deploy image $IMAGE to resource group ${{ vars.AZURE_RESOURCE_GROUP }}"',
+      '          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}   # the subscription of this environment',
+      '      - uses: docker/login-action@v3   # read the image that the build job pushed',
+      '        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }',
+      '      - name: Copy the image into this environment',
+      '        run: |',
+      '          az acr login --name "${{ vars.AZURE_ACR_NAME }}"',
+      '          docker buildx imagetools create --tag "${{ vars.AZURE_ACR_NAME }}.azurecr.io/' + app + ':${{ github.sha }}" "$IMAGE"',
+      '      - name: Deploy (starter - replace with your Container Apps / App Service deploy)',
+      '        run: echo "Deploy ${{ vars.AZURE_ACR_NAME }}.azurecr.io/' + app + ':${{ github.sha }} to resource group ${{ vars.AZURE_RESOURCE_GROUP }}"',
     ];
   }
   return [
-    '      - name: Deploy (starter: replace with kubectl / helm for your cluster)',
+    '      - name: Deploy (starter - replace with kubectl / helm for your cluster)',
     '        run: echo "Deploy image $IMAGE to the ${{ github.job }} namespace"',
   ];
 }

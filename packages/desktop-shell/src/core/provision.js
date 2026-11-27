@@ -221,6 +221,8 @@ function register({ ipcMain, wrap, host, send, cloudflow }) {
             const benign = step.okIf && new RegExp(step.okIf, 'i').test(`${r.err}\n${r.out}`);
             if (!benign) throw new Error(tail(r) || `Exit code ${r.code}`);
           }
+          // a guard step: its output must match (for example "this profile still points at the account chosen for the environment")
+          if (step.expect && !new RegExp(step.expect).test(String(r.out || '').trim())) throw new Error(step.expectMessage || `Unexpected result: ${String(r.out || '').trim().slice(0, 80)}`);
           if (step.capture) {
             const v = r.out.split(/\r?\n/).filter(Boolean).pop() || '';
             if (!VALUE_RE.test(v.trim())) throw new Error(`Unexpected output from the command: ${v.slice(0, 80)}`);

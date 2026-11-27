@@ -12,17 +12,36 @@ Parameters:
     AllowedPattern: '^[a-z][a-z0-9]{0,11}$'
   TrustedPrincipalArn:
     Type: String
-    Description: Who may assume the deployer role (default: any principal of this account that is allowed to call sts:AssumeRole).
+    Description: 'Who may assume the deployer role: any principal of this account that is allowed to call sts:AssumeRole.'
   Protected:
     Type: String
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: A protected (production-like) environment gets immutable image tags, bucket versioning and longer log retention.
 
+  GitHubRepo:
+    Type: String
+    Default: ''
+    Description: Optional owner/name of a GitHub repository whose pipeline may assume the deployer role (OpenID Connect, no stored keys), for this environment only.
+  CreateGitHubOidcProvider:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Create the GitHub OIDC provider in this account. An account can have only one, so say true once per account.
+
 Conditions:
   IsProtected: !Equals [!Ref Protected, 'true']
+  HasGitHubRepo: !Not [!Equals [!Ref GitHubRepo, '']]
+  MakeOidcProvider: !And [!Condition HasGitHubRepo, !Equals [!Ref CreateGitHubOidcProvider, 'true']]
 
 Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
   Repository:
     Type: AWS::ECR::Repository
     Properties:
@@ -100,6 +119,17 @@ Resources:
             Principal:
               AWS: !Ref TrustedPrincipalArn
             Action: sts:AssumeRole
+          - !If
+            - HasGitHubRepo
+            - Effect: Allow
+              Principal:
+                Federated: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+              Action: sts:AssumeRoleWithWebIdentity
+              Condition:
+                StringEquals:
+                  'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+                  'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:environment:${EnvName}'
+            - !Ref AWS::NoValue
       Policies:
         - PolicyName: deploy-this-environment
           PolicyDocument:

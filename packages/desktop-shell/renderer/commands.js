@@ -281,6 +281,7 @@ function setupEditorFeatures() {
   });
   editor.onDidChangeModel(updateLanguageOptions);
   registerJavaFeatures();
+  registerKotlinFeatures();
   if (typeof setupAdvisor === 'function') setupAdvisor();
   if (typeof wireMarkdown === 'function') wireMarkdown();
   // keys Monaco already binds to something else

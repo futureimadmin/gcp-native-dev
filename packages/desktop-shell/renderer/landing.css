@@ -169,3 +169,11 @@ button.big { padding: 8px 26px; font-size: 14px; }
 .lic-link { color: #7a3f00; font-weight: 700; text-decoration: none; } .lic-link:hover { text-decoration: underline; }
 .lic-msg { margin-top: 12px; font-size: 13px; font-weight: 600; color: #4a2c00; } .lic-msg.bad { color: #b01010; } .lic-msg.ok { color: #1c6b2a; }
 .lic-foot { margin-top: 16px; font-size: 11.5px; letter-spacing: .2em; text-transform: uppercase; color: rgba(55,30,0,.8); font-weight: 600; }
+
+/* ---- AWS / Azure: where the environments go ---- */
+.opts .wide { grid-column: 1 / -1; width: 0; min-width: 100%; } /* spans both columns without widening the first one */
+.layout-choice { display: flex; flex-direction: column; gap: 4px; } .layout-opt { display: flex; gap: 4px; align-items: baseline; cursor: pointer; }
+.env-note { border: 1px solid var(--line); border-left: 3px solid #4f7fc7; border-radius: 8px; padding: 8px 10px; background: var(--bg2); font-size: 12.5px; line-height: 1.5; }
+.msg.note { border-left: 3px solid #4f7fc7; background: var(--bg2); color: var(--fg); padding: 6px 10px; border-radius: 6px; margin: 4px 0; font-size: 12.5px; }
+.landing { width: 100%; box-sizing: border-box; } .landing, .landing .card, .cloudpanel { min-width: 0; } /* a wide diagram or table scrolls inside its box instead of widening the page */
+.cloudpanel .cols2 > div { min-width: 0; overflow-wrap: anywhere; }

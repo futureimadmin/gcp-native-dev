@@ -10,6 +10,9 @@ param location string = resourceGroup().location
 @description('Protected (production-like): purge protection, longer log retention, Standard registry')
 param protectedEnv bool = false
 
+@description('Optional owner/name of a GitHub repository whose pipeline may sign in as the deployer identity of this environment (OpenID Connect, no secrets).')
+param githubRepo string = ''
+
 var prefix = '${appName}-${envName}'
 var suffix = uniqueString(resourceGroup().id)
 var tags = {
@@ -123,8 +126,21 @@ resource deployerRg 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+// lets the GitHub environment of this stage sign in as the deployer with no stored secret
+resource deployerGithub 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = if (!empty(githubRepo)) {
+  parent: deployer
+  name: 'github-${envName}'
+  properties: {
+    issuer: 'https://token.actions.githubusercontent.com'
+    subject: 'repo:${githubRepo}:environment:${envName}'
+    audiences: ['api://AzureADTokenExchange']
+  }
+}
+
 output containerAppsEnvironment string = apps.name
 output registryLoginServer string = registry.properties.loginServer
 output keyVaultName string = vault.name
 output runtimeIdentity string = runtime.id
 output deployerIdentity string = deployer.id
+output deployerClientId string = deployer.properties.clientId
+output registryName string = registry.name

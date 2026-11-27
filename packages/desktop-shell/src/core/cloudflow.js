@@ -20,7 +20,7 @@ const CALLABLE = new Set(['status', 'login', 'logout', 'scopes', 'setScope', 'in
 const DEFAULTS = { enabled: false, cloud: 'gcp', scope: '', env: 'dev', region: '', service: '', repo: 'cnd-apps', group: '', impersonate: '', envs: null, targets: {}, app: '', apps: {}, landing: {} };
 const APP_NAME_RE = /^[a-z][a-z0-9-]{1,19}[a-z0-9]$/;
 const ENV_NAME_RE = /^[a-z][a-z0-9]{0,11}$/;
-const TARGET_KEYS = ['scope', 'group', 'impersonate', 'roleArn', 'stack', 'namespace', 'region', 'folder', 'tier', 'provisionedAt', 'mode'];
+const TARGET_KEYS = ['scope', 'group', 'impersonate', 'roleArn', 'stack', 'namespace', 'region', 'folder', 'tier', 'provisionedAt', 'mode', 'account', 'consoleUrl', 'tenant'];
 const envNames = (p) => (p.envs && p.envs.length ? p.envs.map((e) => e.name) : ENVS);
 
 /** Environments chosen by the user: [{name, protected}] (or null = the classic dev / sit / uat / prod). */

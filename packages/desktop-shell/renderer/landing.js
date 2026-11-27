@@ -211,7 +211,52 @@ function cloudOptions(c) {
       wrap.append(adv);
     }
   }
+  if (c.id === 'aws' || c.id === 'azure') wrap.append(...accountOptions(c, st, d));
   return wrap;
+}
+
+/** AWS and Azure: where each environment lives. The default is one account / subscription per environment; one for all is a choice. */
+function accountOptions(c, st, d) {
+  const aws = c.id === 'aws';
+  const o = st.options;
+  const unit = aws ? 'account' : 'subscription';
+  const single = o.layout === 'single';
+  const set = (fn) => { fn(); drawLanding(); schedulePlan(); };
+  const radio = (value, label, hint) => h('label', { class: 'inline layout-opt' },
+    h('input', { type: 'radio', name: `layout-${c.id}`, checked: (value === 'single') === single, onchange: () => set(() => { o.layout = value; }) }), ` ${label}`, h('span', { class: 't-dim', text: ` ${hint}` }));
+  const out = [
+    h('label', { text: 'Where the environments go' }),
+    h('div', { class: 'layout-choice' },
+      radio('perEnv', `One ${unit} per environment (default)`, 'strongest isolation'),
+      radio('single', `All environments in one ${unit}`, 'simplest, fine for development')),
+  ];
+  if (!single) {
+    const options = aws ? (d && d.profiles) || [] : (d && d.subscriptions) || [];
+    if (!d) out.push(h('div', { class: 'hint wide', text: `Looking up your ${aws ? 'AWS profiles' : 'Azure subscriptions'}…` }));
+    else if (!options.length) out.push(h('div', { class: 'hint wide', text: aws ? 'No AWS CLI profiles found. Create one for each account (aws configure sso --profile <name>), then reopen this page.' : 'No subscriptions found. Run az login with an account that can see them.' }));
+    else {
+      o.targets = o.targets || {};
+      for (const e of LD.envs) {
+        const cur = (o.targets[e.name] || {})[aws ? 'profile' : 'subscription'] || '';
+        const sel = h('select', { onchange: (ev) => set(() => { o.targets = { ...o.targets, [e.name]: { [aws ? 'profile' : 'subscription']: ev.target.value } }; }) },
+          h('option', { value: '', text: `Choose the ${unit} for ${e.name}…`, selected: !cur }),
+          ...options.map((x) => (aws ? h('option', { value: x, text: x, selected: cur === x }) : h('option', { value: x.id, text: `${x.name} (${x.id.slice(0, 8)}…)`, selected: cur === x.id }))));
+        out.push(h('label', { text: `${e.name}${e.protected ? ' (protected)' : ''}` }), sel);
+      }
+    }
+  }
+  const repo = h('input', { placeholder: 'owner/repository (optional)', value: o.githubRepo || '', spellcheck: 'false' });
+  repo.onchange = () => set(() => { o.githubRepo = repo.value.trim(); });
+  out.push(h('label', { text: 'GitHub repository of the pipeline' }), repo);
+  if (aws) {
+    const ex = h('input', { type: 'checkbox', checked: !!o.oidcExists });
+    ex.onchange = () => set(() => { o.oidcExists = ex.checked; });
+    out.push(h('label', { text: 'GitHub sign-in provider' }), h('label', { class: 'inline' }, ex, ' it already exists in these accounts'));
+  }
+  out.push(h('div', { class: 'env-note wide' },
+    h('b', { text: 'Your choice, your pipeline. ' }),
+    `Nativity does not create ${unit}s: choose existing ones. Whether environments share one ${unit} is up to you. The generated CI/CD pipeline promotes the same build from the first environment to the last, signing in to each with that environment's own identity. ${aws ? 'The AWS console has the same address for everyone; the account you are signed in to is what differs (give each account an alias for a clear sign-in address).' : 'The Azure portal has the same address for everyone; the subscription you are in is what differs.'} The guide ENVIRONMENTS.md lists the links and the exact pipeline variables.`));
+  return out;
 }
 
 /** Google Cloud: organisation landing zone + applications, in its own wizard. */
@@ -241,6 +286,7 @@ function cloudPanel(c) {
   const a = pc.architecture;
   box.append(
     h('h3', { text: a.title }), h('p', { class: 'summary', text: a.summary }),
+    ...(a.notes || []).map((n) => h('div', { class: 'msg note', text: `ℹ ${n}` })),
     ...(pc.blockers || []).map((b) => h('div', { class: 'msg err', text: `⛔ ${b}` })), ...(pc.warnings || []).map((w) => h('div', { class: 'msg warn', text: `⚠ ${w}` })),
     h('div', { class: 'archwrap' }, drawArchitecture(a, c.color || '#4f7fc7')),
     h('div', { class: 'cols2' },
