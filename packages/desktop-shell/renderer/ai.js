@@ -186,7 +186,9 @@ function renderAiPanel() {
     $('ai-model').replaceWith(pick);
     const lg = $('ai-legend'); lg.replaceChildren(...(tierLegend(p) ? [tierLegend(p)] : [])); lg.title = p.tierNote || '';
   }
-  $('ai-cli').replaceChildren(...ai.cli.map((a) => h('button', { class: 'subtle', text: a.name, title: a.installed ? (a.id === 'claude-code' ? 'Chat with Claude Code in this panel' : `Open ${a.name} in a console window`) : a.installHint, disabled: !a.installed, onclick: () => launchCli(a.id) })));
+  // Only the terminal assistant that belongs to the selected provider: Claude -> Claude Code, Gemini -> Gemini CLI, OpenAI-compatible -> Codex CLI.
+  const CLI_FOR = { 'claude-code': 'claude-code', claude: 'claude-code', 'gemini-vertex': 'gemini-cli', gemini: 'gemini-cli', 'openai-compatible': 'codex-cli' };
+  $('ai-cli').replaceChildren(...ai.cli.filter((a) => p && CLI_FOR[p.id] === a.id).map((a) => h('button', { class: 'subtle', text: a.name, title: a.installed ? (a.id === 'claude-code' ? 'Chat with Claude Code in this panel' : `Open ${a.name} in a console window`) : a.installHint, disabled: !a.installed, onclick: () => launchCli(a.id) })));
 
   const log_ = $('ai-log');
   log_.replaceChildren(...(chat.messages.filter((m) => !(m.streaming && !m.content)).length ? chat.messages.filter((m) => !(m.streaming && !m.content)).map(renderMessage) : [h('div', { class: 'empty', text: p && !(p.keySet || !p.needsKey) ? (p && p.auth === 'signin' ? (p.statusText || 'Sign in to use this provider.') : 'Add your API key in Settings > AI to start chatting.') : 'Ask about your code, a deployment, a migration…' })]));
@@ -206,7 +208,7 @@ function renderAiPanel() {
   const notInstalled = !!(p && p.id === 'claude-code' && !p.ready && /not installed/i.test(p.statusText || ''));
   $('ai-install').classList.toggle('hidden', !notInstalled);
   $('ai-signin').classList.toggle('hidden', !(p && p.canLogin && !p.ready) || notInstalled);
-  if (p && p.auth === 'signin' && p.ready) $('ai-hint').textContent = p.statusText;
+  if (p && p.auth === 'signin' && p.statusText) $('ai-hint').textContent = p.statusText; // sign-in state of the selected provider (Claude plan, Google Cloud account)
 }
 
 async function sendChat() {
@@ -286,6 +288,7 @@ function wireAi() {
     chat.agent = e.target.checked; renderAiPanel();
   };
   $('ai-install').onclick = installClaudeCode;
+  $('ai-lifecycle').onclick = () => openLifecycle();
   cns.on('ai:stream', onAiStream);
   $('ai-signin').onclick = () => curProvider() && aiSignIn(curProvider().id);
   $('ai-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendChat(); } });
@@ -315,6 +318,7 @@ function onAiStream(e) {
     chat.streamId = 0;
     chat.stream = null;
     chat.messages.forEach((x) => { x.streaming = false; });
+    if (chat.onDone) { const f = chat.onDone; chat.onDone = null; setTimeout(f, 0); }
     chat.messages = chat.messages.filter((x) => x.tool || x.content);
     afterAiTurn();
   }

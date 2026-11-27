@@ -284,3 +284,21 @@ webview { flex: 1; border: none; background: #fff; }
 
 .actioncard { border: 1px solid var(--accent); border-radius: 6px; padding: 8px 10px; margin: 8px 0; background: var(--bg2); } .actioncard.bad { border-color: var(--danger); }
 .actioncard .ach { display: flex; flex-direction: column; gap: 4px; } .actioncard code { font: 12px var(--mono); color: var(--dim); word-break: break-all; }
+
+/* AI Lifecycle */
+.lc-sec { max-width: 900px; } .lc-sec h3 { margin: 0 0 4px; font-size: 15px; }
+.lc-offer { margin: 6px 0; }
+.lc-log { max-height: 220px; overflow: auto; margin-top: 8px; } .lc-line { font: 12px var(--mono); padding: 2px 0; color: var(--dim); } .lc-line.ok { color: #4caf50; } .lc-line.bad { color: var(--danger); }
+.lc-finds { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; } .lc-find { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+.lc-ftext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .lc-ftext small { color: var(--dim); } .lc-ftext code { font: 11px var(--mono); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-fact { display: flex; gap: 4px; } .lc-steps { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; } .lc-step { display: flex; gap: 8px; align-items: center; }
+.badge.warn { background: #b26a00; color: #fff; }
+.lc-sec { flex: none; height: auto; overflow: visible; margin: 12px 0; } .lc-sec .row { flex-wrap: wrap; }
+.lc-sec select { width: auto; min-width: 140px; }
+.lc-idea { width: 100%; box-sizing: border-box; margin: 6px 0 10px; font: 13px var(--ui, inherit); }
+
+/* Diagrams in Markdown */
+.md-diagram { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); overflow-x: auto; text-align: center; }
+.md-diagram svg { max-width: 100%; height: auto; }
+.md-diagram-bar { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; opacity: .6; } .md-diagram:hover .md-diagram-bar { opacity: 1; }
+.md-diagram.failed { text-align: left; border-color: var(--danger); } .md-diagram-err pre { white-space: pre-wrap; font: 12px var(--mono); }

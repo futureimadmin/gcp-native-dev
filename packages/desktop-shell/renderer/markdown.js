@@ -173,6 +173,7 @@ function renderMarkdown(text, opts = {}) {
   }
 
   function codeBlock(code, lang) {
+    if (lang === 'mermaid') { const d = A('div', { class: 'md-diagram' }); d.dataset.src = code; d.append(A('div', { class: 'hint', text: 'Drawing the diagram…' })); return d; }
     const lg = MD_LANG[lang] || '';
     const pre = A('pre', { class: 'md-pre' });
     const c = A('code', {}, code);

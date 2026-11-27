@@ -32,6 +32,7 @@ function mdRender() {
   const keep = MDV.view.scrollTop;
   try {
     MDV.view.replaceChildren(renderMarkdown(t.model.getValue(), { dir: dirName(t.path), onOpen: (rel) => mdOpenRelative(t.path, rel) }));
+    if (typeof mdDrawDiagrams === 'function') mdDrawDiagrams(MDV.view, { saveDir: dirName(t.path), saveName: baseName(t.path).replace(/\.[^.]+$/, '') });
   } catch (e) {
     // never a blank page: say what happened and offer the text editor
     MDV.view.replaceChildren(h('div', { class: 'md-fail' }, h('b', { text: 'This Markdown file could not be shown as a preview.' }), h('div', { class: 'hint', text: `${e.message}. Use Edit to read the text.` })));

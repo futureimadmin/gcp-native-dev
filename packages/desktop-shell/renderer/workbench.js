@@ -324,6 +324,7 @@ let histIdx = 0;
 const promptStr = () => `${state.cwd ? baseName(state.cwd) : '~'}>`;
 
 function termPrint(text, cls) {
+  if (typeof lcBuf !== 'undefined') lcBuf.term = (lcBuf.term + text).slice(-40000);
   const out = $('term-out');
   out.append(h('span', { class: cls || '', text }));
   out.scrollTop = out.scrollHeight;

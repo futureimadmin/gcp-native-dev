@@ -57,6 +57,7 @@ function runtimeMissing(task) {
 /* ------------------------------ output helpers ------------------------------ */
 
 function outPrint(text, cls) {
+  lcBuf.out = (lcBuf.out + text).slice(-40000);
   const out = $('output-out');
   out.append(h('span', { class: cls || '', text }));
   out.scrollTop = out.scrollHeight;
@@ -82,6 +83,7 @@ async function startTask(proj, task, where) {
     return null;
   }
   const out = where === 'output';
+  if (out) lcBuf.out = ''; else lcBuf.term = '';
   showPanel(out ? 'output' : 'terminal');
   const print = out ? outPrint : termPrint;
   print(`\n> ${task.cmd}   [${proj.dir}]\n`, 't-cmd');
@@ -109,6 +111,7 @@ async function doBuild(auto) {
   run.building = false;
   outPrint(code === 0 ? '✔ Build finished\n' : `✘ Build failed (exit ${code})\n`, code === 0 ? 't-cmd' : 't-err');
   setRunStatus(run.proc ? $('st-run').textContent : (code === 0 ? '✔ Build OK' : '✘ Build failed — see OUTPUT'));
+  if (code !== 0 && typeof lcOfferFix === 'function') lcOfferFix('build');
   if (!run.proc) setTimeout(() => { if (!run.proc && !run.building) setRunStatus(''); }, 6000);
 }
 
@@ -132,6 +135,7 @@ async function doStart(kind) {
   h_.done.then((code) => {
     if (run.proc && run.proc.id === h_.id) { run.proc = null; runningId = null; }
     setRunStatus(code === 0 || code === null ? '' : `■ ${proj.type} stopped (exit ${code})`);
+    if (code !== 0 && code !== null && typeof lcDetectRunFailure === 'function') lcDetectRunFailure(proj.type);
     renderRunConfig();
     setTimeout(() => { if (!run.proc && !run.building) setRunStatus(''); }, 8000);
   });
@@ -167,6 +171,7 @@ async function doTest() {
   const code = await h_.done;
   run.building = false;
   outPrint(code === 0 ? '✔ Tests passed\n' : `✘ Tests failed (exit ${code})\n`, code === 0 ? 't-cmd' : 't-err');
+  if (code !== 0 && typeof lcOfferFix === 'function') lcOfferFix('test');
 }
 
 /* ------------------------------ auto-save / auto-build ------------------------------ */

@@ -86,6 +86,7 @@ function registerCommands() {
   C('ai.toggle', () => toggleAi(), 'AI: Toggle Assistant');
   C('ai.cli', (id) => launchCli(id));
   C('ai.claude', openClaude, 'AI: Claude Code (in the IDE)');
+  C('ai.lifecycle', openLifecycle, 'AI: Lifecycle (fix, security, logs, recovery, release)');
   C('palette.open', openPalette);
   C('cloud.login', (id) => cloudLogin(id));
   C('cloud.toggleMode', () => (cnOn() ? disableMode() : enableMode()), 'Cloud: Enable / Disable Cloud Native Development');
