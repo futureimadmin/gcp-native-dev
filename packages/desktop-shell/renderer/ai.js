@@ -1,7 +1,7 @@
 /* AI assistant panel. Providers (Claude, Gemini, Grok, OpenAI-compatible/local) and terminal agents come from plugins. */
 'use strict';
 
-const chat = { provider: '', messages: [], attachments: [], busy: false, session: '', stream: null, streamId: 0, edits: false };
+const chat = { provider: '', messages: [], attachments: [], busy: false, session: '', stream: null, streamId: 0, edits: false, agent: false };
 let aiRaf = false;
 const scheduleAiRender = () => { if (aiRaf) return; aiRaf = true; requestAnimationFrame(() => { aiRaf = false; renderAiPanel(); }); };
 const MAX_ATTACH = 60000;
@@ -9,8 +9,10 @@ const MAX_ATTACH = 60000;
 async function loadAi(fresh) {
   try { state.ai = await inv('ai:list', !!fresh); } catch (e) { state.ai = { api: [], cli: [], secureStorage: false }; status(e.message, true); }
   if (!chat.provider || !state.ai.api.some((a) => a.id === chat.provider)) {
-    const ready = state.ai.api.find((a) => a.ready);
-    chat.provider = (ready || state.ai.api[0] || {}).id || '';
+    // Claude Code first: it uses the customer's own Claude plan, no API key. Then any other ready assistant, then the first one.
+    const cc = state.ai.api.find((a) => a.id === 'claude-code');
+    const ready = (cc && cc.ready && cc) || state.ai.api.find((a) => a.ready);
+    chat.provider = (ready || cc || state.ai.api[0] || {}).id || '';
   }
   renderAiPanel();
   if (!fresh || !loadAi.refreshing) refreshModelLists();
@@ -50,12 +52,65 @@ function contextSize() {
   return chat.attachments.reduce((n, a) => n + a.text.length, 0);
 }
 
+const AGENT_PROMPT = [
+  'AGENT MODE. You can create and change files inside the open project folder yourself. You cannot run builds, tests, deployments or shell commands yourself: the IDE does that after the user approves.',
+  'Make the file edits first. Then, when you want something run, end your reply with one block per action, exactly like this:',
+  '```ide-action',
+  '{"action":"build"}',
+  '```',
+  'Actions: build, test, run, deploy (deploys the current environment through the IDE, which asks again), pipeline (generate the CI/CD pipeline), provision (opens the environment wizard for AWS / Azure / GCP), new-project (opens the New Project dialog),',
+  '{"action":"open-file","path":"relative/path"} and {"action":"terminal","title":"what it does","command":"one shell command"} (runs in the project folder; one line, never destructive, never with secrets).',
+  'The user sees each action as a card and decides. Never ask for or write secrets or keys. Stay inside the project folder.',
+].join(String.fromCharCode(10));
+
+const IDE_ACTIONS = {
+  build: ['Build the project', () => CNS.run('run.build')],
+  test: ['Run the tests', () => CNS.run('run.test')],
+  run: ['Run the application', () => CNS.run('run.run')],
+  deploy: ['Deploy to the current environment', () => CNS.run('cloud.deploy')],
+  pipeline: ['Generate the CI/CD pipeline', () => CNS.run('cloud.pipeline.generate')],
+  provision: ['Open the environment wizard', () => openLanding()],
+  'new-project': ['Open the New Project dialog', () => CNS.run('project.new')],
+};
+
+/** A card for one action Claude proposed. Nothing runs until the user clicks Run; the command or path is shown exactly as it will be used. */
+function actionCard(json) {
+  let a;
+  try { a = JSON.parse(json); } catch { return h('div', { class: 'mcode' }, h('pre', { text: json })); }
+  const name = String((a && a.action) || '');
+  let title = ''; let detail = ''; let run = null;
+  if (IDE_ACTIONS[name]) { title = IDE_ACTIONS[name][0]; run = IDE_ACTIONS[name][1]; }
+  else if (name === 'open-file' && typeof a.path === 'string' && state.workspace) {
+    const rel = a.path.replace(/^[\\/]+/, '');
+    if (!/\.\.[\\/]|^\.\.$|^[A-Za-z]:/.test(rel) && rel.length < 300) { title = 'Open a file'; detail = rel; run = () => openFile(joinPath(state.workspace, rel.split('/').join(BS))); }
+  } else if (name === 'terminal' && typeof a.command === 'string' && state.workspace) {
+    const cmd = a.command.trim();
+    if (cmd && cmd.length < 500 && !/[\r\n]/.test(cmd)) {
+      title = String(a.title || 'Run a command').slice(0, 100); detail = cmd;
+      run = async () => {
+        showPanel('terminal'); termPrint('> ' + cmd + String.fromCharCode(10), 't-cmd');
+        const t = await tryInv('term:run', cmd, state.workspace);
+        if (!t.ok) return status(t.error, true);
+        termStdin = t.data; termWaiters.set(t.data, () => { termStdin = 0; });
+      };
+    }
+  }
+  if (!run) return h('div', { class: 'actioncard bad' }, h('b', { text: 'Claude proposed an action the IDE does not know.' }), h('code', { text: json.slice(0, 200) }));
+  const card = h('div', { class: 'actioncard' }, h('div', { class: 'ach' }, h('b', { text: title }), detail ? h('code', { text: detail }) : null));
+  const row = h('div', { class: 'mact' },
+    h('button', { class: 'primary', text: 'Run', onclick: async () => { row.replaceChildren(h('span', { class: 'hint', text: 'Started.' })); try { await run(); } catch (e) { status(e.message, true); } } }),
+    h('button', { text: 'Dismiss', onclick: () => card.remove() }));
+  card.append(row);
+  return card;
+}
+
 function systemPrompt() {
   const p = state.proj;
   const bits = ['You are an AI assistant inside Nativity Studio, an IDE for building, modernizing and migrating applications across GCP, AWS, Azure and private clouds.',
     'Be concise and concrete. Prefer least-privilege IAM, infrastructure as code, and cloud-neutral designs unless asked otherwise. Never ask for or output secrets.'];
   if (state.workspace) bits.push(`Open project: ${baseName(state.workspace)}.`);
   if (p && p.enabled) bits.push(`Connected cloud: ${(cloudMeta(p.cloud) || {}).name}, environment: ${p.env}, region: ${p.region || 'n/a'}.`);
+  if (chat.agent) bits.push(AGENT_PROMPT);
   return bits.join('\n');
 }
 
@@ -74,6 +129,7 @@ function renderMessage(m) {
   parts.forEach((part, i) => {
     if (i % 2 === 0) { if (part.trim()) body.append(h('div', { class: 'mtext', text: part.trim() })); return; }
     const code = part.replace(/^[^\n]*\n/, '');
+    if (/^ide-action\s/.test(part) && m.role === 'assistant' && !m.streaming) { body.append(actionCard(code.trim())); return; }
     body.append(h('div', { class: 'mcode' }, h('pre', { text: code.replace(/\n$/, '') }),
       h('div', { class: 'mact' },
         h('button', { text: 'Copy', onclick: () => navigator.clipboard.writeText(code).then(() => status('Copied.')).catch(() => status('Copy failed.', true)) }),
@@ -144,7 +200,12 @@ function renderAiPanel() {
   $('ai-send').textContent = chat.busy && chat.streamId ? 'Stop' : 'Send';
   $('ai-edits-row').classList.toggle('hidden', !(p && p.canEdit));
   $('ai-edits').checked = chat.edits;
-  $('ai-signin').classList.toggle('hidden', !(p && p.canLogin && !p.ready));
+  $('ai-agent-row').classList.toggle('hidden', !(p && p.canEdit));
+  $('ai-agent').checked = chat.agent;
+  $('ai-edits-row').classList.toggle('hidden', !(p && p.canEdit) || chat.agent);
+  const notInstalled = !!(p && p.id === 'claude-code' && !p.ready && /not installed/i.test(p.statusText || ''));
+  $('ai-install').classList.toggle('hidden', !notInstalled);
+  $('ai-signin').classList.toggle('hidden', !(p && p.canLogin && !p.ready) || notInstalled);
   if (p && p.auth === 'signin' && p.ready) $('ai-hint').textContent = p.statusText;
 }
 
@@ -169,7 +230,7 @@ async function sendChat() {
     const msg = { role: 'assistant', content: '', who: p.name, streaming: true };
     chat.messages.push(msg);
     chat.stream = msg;
-    const r0 = await tryInv('ai:chatStream', p.id, { model, system: systemPrompt(), messages: wire, session: chat.session || '', edits: chat.edits });
+    const r0 = await tryInv('ai:chatStream', p.id, { model, system: systemPrompt(), messages: wire, session: chat.session || '', edits: chat.edits || chat.agent });
     if (!r0.ok) { msg.streaming = false; msg.error = true; msg.content = r0.error; chat.busy = false; chat.stream = null; return renderAiPanel(); }
     chat.streamId = r0.data;
     return renderAiPanel();
@@ -220,6 +281,11 @@ function wireAi() {
     if (e.target.checked && !(await confirmBox('Let Claude edit files in this project?', 'Claude Code can create and change files in the open project folder without asking each time. Use Git so you can review and undo changes.'))) { e.target.checked = false; return; }
     chat.edits = e.target.checked;
   };
+  $('ai-agent').onchange = async (e) => {
+    if (e.target.checked && !(await confirmBox('Turn on Agent mode?', 'Claude can create and change files in the open project folder without asking each time, and it proposes builds, tests, deploys and commands as cards that you approve one by one. Use Git so you can review and undo changes.'))) { e.target.checked = false; return; }
+    chat.agent = e.target.checked; renderAiPanel();
+  };
+  $('ai-install').onclick = installClaudeCode;
   cns.on('ai:stream', onAiStream);
   $('ai-signin').onclick = () => curProvider() && aiSignIn(curProvider().id);
   $('ai-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendChat(); } });
@@ -264,4 +330,21 @@ async function afterAiTurn() {
     try { const txt = await inv('fs:readFile', t.path); if (txt !== t.saved) { t.model.setValue(txt); t.saved = txt; } } catch { /* file removed */ }
   }
   renderTabs();
+}
+
+/** Installs Claude Code with npm after the user agrees; the IDE then picks it up and offers Sign in. */
+async function installClaudeCode() {
+  const cmd = 'npm install -g @anthropic-ai/claude-code';
+  const NL2 = String.fromCharCode(10, 10);
+  if (!(await confirmBox('Install Claude Code?', 'This runs in the terminal:' + NL2 + cmd + NL2 + 'It needs Node.js (npm) on this computer. Afterwards click Sign in and log in with your own Claude plan. No API key is needed.'))) return;
+  showPanel('terminal');
+  termPrint('> ' + cmd + String.fromCharCode(10), 't-cmd');
+  const t = await tryInv('term:run', cmd, state.workspace || undefined);
+  if (!t.ok) return status(t.error, true);
+  termStdin = t.data;
+  termWaiters.set(t.data, async (code) => {
+    termStdin = 0;
+    await loadAi(true);
+    status(code === 0 ? 'Claude Code installed. Click Sign in next.' : 'Install did not finish. See the terminal (Node.js with npm is required).', code !== 0);
+  });
 }

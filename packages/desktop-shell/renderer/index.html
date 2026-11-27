@@ -110,6 +110,7 @@
         <b>✦ AI Assistant</b>
         <span class="spacer"></span>
         <button id="ai-new" class="subtle" title="New chat">New chat</button>
+        <button id="ai-install" class="subtle hidden" title="Install Claude Code on this computer">Install Claude Code</button>
         <button id="ai-signin" class="subtle hidden" title="Sign in to this provider">Sign in</button>
         <button id="ai-close" class="subtle" title="Close">✕</button>
       </div>
@@ -120,6 +121,7 @@
       <div id="ai-legend" class="aiLegend"></div>
       <div id="ai-cli" class="aicli"></div>
       <label id="ai-edits-row" class="inline hidden aiedits"><input type="checkbox" id="ai-edits" /> Allow Claude to edit files in this project</label>
+      <label id="ai-agent-row" class="inline hidden aiedits" title="Claude edits files and proposes builds, tests, deploys and commands as cards you approve"><input type="checkbox" id="ai-agent" /> Agent mode: Claude proposes build, test, deploy and commands for you to approve</label>
       <div id="ai-log"></div>
       <div class="aiattach">
         <button id="ai-att-file" class="subtle">+ File</button>
